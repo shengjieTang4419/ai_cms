@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <parent>
+        <groupId>com.cloud</groupId>
+        <artifactId>spring-ai-cms</artifactId>
+        <version>${revision}</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>cloud-common</artifactId>
+    <packaging>pom</packaging>
+
+    <modules>
+        <module>cloud-common-datasource</module>
+        <module>cloud-common-core</module>
+        <module>cloud-common-mongoDB</module>
+        <module>cloud-common-redis</module>
+        <module>cloud-common-security</module>
+    </modules>
+
+    <description>
+        cloud-common通用模块
+    </description>
+
+</project>

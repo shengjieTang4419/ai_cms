@@ -1,0 +1,63 @@
+version: '3.8'
+services:
+  cloud-redis:
+    container_name: cloud-redis
+    image: redis
+    build:
+      context: ./redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - ./redis/conf/redis.conf:/home/cloud/redis/redis.conf
+      - ./redis/data:/data
+    command: redis-server /home/cloud/redis/redis.conf
+    environment:
+      - TZ=Asia/Shanghai
+    networks:
+      - cloud-network
+
+  cloud-mongodb:
+    image: mongo:latest
+    container_name: cloud-mongodb
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: sangfor!@#123
+      TZ: Asia/Shanghai
+    volumes:
+      - ./mongodb/data:/data/db
+      - ./mongodb/logs:/var/log/mongodb
+      - ./mongodb/init:/docker-entrypoint-initdb.d
+    ports:
+      - "27017:27017"
+    command:
+      - --auth
+      - --bind_ip_all
+      - --logpath=/var/log/mongodb/mongod.log
+    networks:
+      - cloud-network
+
+  cloud-postgres:
+    image: pgvector/pgvector:pg17 # 使用支持pgvector的PostgreSQL镜像
+    container_name: cloud-postgres
+    environment:
+      POSTGRES_DB: 'small_basic' # 数据库名称
+      POSTGRES_USER: 'postgres' # 用户名
+      POSTGRES_PASSWORD: 'small@123$%^' # 密码
+      TZ: "Asia/Shanghai"
+    volumes:
+      - ./postgres/data:/var/lib/postgresql/data # 数据持久化
+      - /etc/localtime:/etc/localtime:ro # 时区同步
+    ports:
+      - "5432:5432"
+    command:
+      - "postgres"
+      - "-c"
+      - "max_connections=100"
+      - "-c"
+      - "shared_buffers=256MB"
+      - "-c"
+      - "timezone=Asia/Shanghai"
+    networks:
+      - cloud-network
+networks:
+  cloud-network:
