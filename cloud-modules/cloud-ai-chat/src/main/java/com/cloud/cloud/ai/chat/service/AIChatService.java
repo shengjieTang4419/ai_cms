@@ -1,7 +1,6 @@
 package com.cloud.cloud.ai.chat.service;
 
 
-import com.cloud.cloud.ai.chat.repository.ChatSessionRepository;
 import com.cloud.cloud.common.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -9,9 +8,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.CollectionUtils;
 import reactor.core.publisher.Flux;
 
@@ -31,7 +28,6 @@ public class AIChatService {
 
     private final ChatClient chatClient;
     private final ChatTitleService chatTitleService;
-    private final ChatSessionRepository chatSessionRepository;
     private final ChatDialogueService chatDialogueService;
     private final ChatMessageService chatMessageService;
     private final PgVectorStore vectorStore;
@@ -68,7 +64,6 @@ public class AIChatService {
                 .doOnComplete(() -> {
                     chatMessageService.saveUserMessage(sessionId, userId, originQuery);
                     chatMessageService.saveAssistantMessage(sessionId, userId, fullResponse.toString(), isRagEnhanced);
-                    updateSessionMessageCount(sessionId);
                 });
     }
 
@@ -91,19 +86,5 @@ public class AIChatService {
                 
                 请提供准确、有用的回答：
                 """, context, userQuery);
-    }
-
-
-    /**
-     * 更新会话消息计数
-     */
-    @Async
-    @Transactional
-    public void updateSessionMessageCount(String sessionId) {
-        try {
-            chatSessionRepository.incrementMessageCount(sessionId);
-        } catch (Exception e) {
-            log.error("更新会话消息计数失败: {}", sessionId, e);
-        }
     }
 }

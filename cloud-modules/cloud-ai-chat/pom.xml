@@ -79,6 +79,17 @@
             <artifactId>cloud-modules-system</artifactId>
             <version>${revision}</version>
         </dependency>
+
+        <!-- Spring AI MCP 支持 -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-mcp-server-webflux</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-webflux</artifactId>
+        </dependency>
     </dependencies>
 
     <build>

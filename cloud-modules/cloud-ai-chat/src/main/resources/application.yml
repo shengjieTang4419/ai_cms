@@ -31,7 +31,18 @@ spring:
     dashscope:
       # 参考 https://bailian.console.aliyun.com/?tab=api#/api/?type=model&url=https%3A%2F%2Fhelp.aliyun.com%2Fdocument_detail%2F2803795.html&renderType=iframe
       api-key: ${DASHSCOPE_API_KEY}
+    mcp:
+      server:
+        base-url: /api/mcp
+        type: ASYNC
+
   servlet:
     multipart:
       max-file-size: 50MB
       max-request-size: 50MB
+logging:
+  level:
+    com.cloud.cloud.ai.chat.mcp.service: DEBUG
+    reactor.netty.http.client: DEBUG
+map:
+  api-key: ${AMAP_API_KEY}
