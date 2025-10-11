@@ -44,5 +44,7 @@ logging:
   level:
     com.cloud.cloud.ai.chat.mcp.service: DEBUG
     reactor.netty.http.client: DEBUG
+    org.springframework.ai.chat.client: DEBUG  # 添加这行，查看工具调用决策
+    org.springframework.ai.tool: DEBUG          # 添加这行，查看工具执行
 map:
   api-key: ${AMAP_API_KEY}

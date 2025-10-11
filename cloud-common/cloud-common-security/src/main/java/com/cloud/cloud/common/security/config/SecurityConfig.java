@@ -83,11 +83,12 @@ public class SecurityConfig {
                 .authorizeHttpRequests(authz -> authz
                         .requestMatchers("/api/auth/**").permitAll()
                         .requestMatchers("/api/public/**").permitAll()
-                        .requestMatchers("/api/aiChat/**").permitAll()  // 临时开放聊天接口
                         .requestMatchers("/h2-console/**").permitAll()
                         .requestMatchers("/swagger-ui/**", "/v3/api-docs/**").permitAll()
                         .anyRequest().authenticated()
-                );
+                )
+                // 添加这个配置：禁用异步方法的安全检查
+                .securityContext(context -> context.requireExplicitSave(false));
 
         // 只有当 authenticationProvider bean 存在时才设置它（仅 system 模块需要）
         if (userDetailsService != null && passwordEncoder != null) {
@@ -99,4 +100,6 @@ public class SecurityConfig {
 
         return http.build();
     }
+
+
 }
