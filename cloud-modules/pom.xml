@@ -20,6 +20,7 @@
     <modules>
         <module>cloud-ai-chat</module>
         <module>cloud-modules-system</module>
+        <module>cloud-ai-membership</module>
     </modules>
 
     <dependencies>

@@ -8,6 +8,7 @@ import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import reactor.core.publisher.Flux;
@@ -31,6 +32,7 @@ public class AIChatService {
     private final ChatDialogueService chatDialogueService;
     private final ChatMessageService chatMessageService;
     private final PgVectorStore vectorStore;
+    private final TagAnalysisService tagAnalysisService;
 
 
     public String simpleChat(String query) {
@@ -64,6 +66,9 @@ public class AIChatService {
                 .doOnComplete(() -> {
                     chatMessageService.saveUserMessage(sessionId, userId, originQuery);
                     chatMessageService.saveAssistantMessage(sessionId, userId, fullResponse.toString(), isRagEnhanced);
+                    
+                    // 异步分析聊天内容并更新用户标签
+                    analyzeChatContentAsync(userId, sessionId, originQuery, fullResponse.toString());
                 });
     }
 
@@ -86,5 +91,23 @@ public class AIChatService {
                 
                 请提供准确、有用的回答：
                 """, context, userQuery);
+    }
+
+    /**
+     * 异步分析聊天内容并更新用户标签
+     */
+    @Async
+    public void analyzeChatContentAsync(Long userId, String sessionId, String userQuery, String assistantResponse) {
+        try {
+            // 合并用户问题和AI回答作为分析内容
+            String combinedContent = String.format("用户问题：%s\nAI回答：%s", userQuery, assistantResponse);
+            
+            // 分析聊天内容并更新标签
+            tagAnalysisService.analyzeChatSession(userId, sessionId, combinedContent);
+            
+            log.info("聊天内容分析完成，userId: {}, sessionId: {}", userId, sessionId);
+        } catch (Exception e) {
+            log.error("聊天内容分析失败，userId: {}, sessionId: {}", userId, sessionId, e);
+        }
     }
 }
