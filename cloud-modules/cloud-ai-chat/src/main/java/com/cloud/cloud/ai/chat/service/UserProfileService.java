@@ -35,8 +35,7 @@ public class UserProfileService {
         UserProfile profile;
 
         if (existingProfileOpt.isPresent()) {
-            UserProfile existingProfile = existingProfileOpt.get();
-            profile = existingProfile;
+            profile = existingProfileOpt.get();
             profile.setGender(request.getGender());
             profile.setAge(request.getAge());
             profile.setLocation(request.getLocation());

@@ -20,6 +20,23 @@ import java.time.LocalDateTime;
 @Table(name = "user_tags")
 public class UserTags implements Serializable {
 
+    /**
+     * 权重常量
+     */
+    public static final BigDecimal BASE_WEIGHT = BigDecimal.ONE;      // 基础权重（来自用户画像）
+    public static final BigDecimal CHAT_WEIGHT = BigDecimal.ONE;      // 聊天权重
+    public static final BigDecimal OVERLAP_WEIGHT = BigDecimal.valueOf(2);   // 重叠权重（基础画像与聊天标签重叠时，为了使得热点标签更突出）
+    public static final BigDecimal DEMOGRAPHIC_WEIGHT = BigDecimal.valueOf(0.2); // 人口统计标签权重（年龄标签）
+    public static final BigDecimal DECAY_FACTOR = BigDecimal.valueOf(0.5); // 衰减因子（每月衰减一半，快速使得过期失效热点数据失效）
+
+    /**
+     * 来源
+     * PROFILE-来自用户画像, CHAT-来自聊天内容, FUSION-融合标签
+     */
+    public static final String profileSource = "PROFILE";
+    public static final String chatSource = "CHAT";
+    public static final String fusionSource = "FUSION";
+
     private static final long serialVersionUID = 1L;
 
     /**

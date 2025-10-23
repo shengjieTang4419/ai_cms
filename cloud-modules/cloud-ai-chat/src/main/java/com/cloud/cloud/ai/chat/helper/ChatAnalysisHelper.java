@@ -17,7 +17,7 @@ import java.util.Optional;
 
 /**
  * 聊天分析助手类
- *
+ * <p>
  * 将聊天内容分析逻辑从TagAnalysisService中抽离出来，
  *
  * @author AI Assistant
@@ -36,9 +36,9 @@ public class ChatAnalysisHelper {
     /**
      * 分析聊天内容并更新标签
      *
-     * @param userId 用户ID
+     * @param userId    用户ID
      * @param sessionId 会话ID
-     * @param content 聊天内容
+     * @param content   聊天内容
      */
     public void analyzeChatSession(Long userId, String sessionId, String content) {
         log.info("分析聊天会话，userId: {}, sessionId: {}", userId, sessionId);

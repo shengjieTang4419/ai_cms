@@ -1,6 +1,7 @@
 package com.cloud.cloud.ai.chat.service;
 
 
+import com.cloud.cloud.ai.chat.helper.ChatAnalysisHelper;
 import com.cloud.cloud.common.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -32,7 +33,7 @@ public class AIChatService {
     private final ChatDialogueService chatDialogueService;
     private final ChatMessageService chatMessageService;
     private final PgVectorStore vectorStore;
-    private final TagAnalysisService tagAnalysisService;
+    private final ChatAnalysisHelper chatAnalysisHelper;
 
 
     public String simpleChat(String query) {
@@ -103,7 +104,7 @@ public class AIChatService {
             String combinedContent = String.format("用户问题：%s\nAI回答：%s", userQuery, assistantResponse);
             
             // 分析聊天内容并更新标签
-            tagAnalysisService.analyzeChatSession(userId, sessionId, combinedContent);
+            chatAnalysisHelper.analyzeChatSession(userId, sessionId, combinedContent);
             
             log.info("聊天内容分析完成，userId: {}, sessionId: {}", userId, sessionId);
         } catch (Exception e) {

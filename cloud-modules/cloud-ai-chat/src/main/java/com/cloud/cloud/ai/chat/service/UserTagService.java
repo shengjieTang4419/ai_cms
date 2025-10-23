@@ -3,7 +3,9 @@ package com.cloud.cloud.ai.chat.service;
 import com.cloud.cloud.ai.chat.domain.Occupation;
 import com.cloud.cloud.ai.chat.domain.UserProfile;
 import com.cloud.cloud.ai.chat.domain.UserTags;
+import com.cloud.cloud.ai.chat.repository.UserProfileRepository;
 import com.cloud.cloud.ai.chat.repository.UserTagsRepository;
+import com.cloud.cloud.ai.chat.util.ValidationUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.scheduling.annotation.Scheduled;
@@ -32,15 +34,8 @@ import java.util.stream.Collectors;
 public class UserTagService {
 
     private final UserTagsRepository userTagsRepository;
+    private final UserProfileRepository profileRepository;
 
-    /**
-     * 权重常量
-     */
-    private static final BigDecimal BASE_WEIGHT = BigDecimal.ONE;      // 基础权重（来自用户画像）
-    private static final BigDecimal CHAT_WEIGHT = BigDecimal.ONE;      // 聊天权重
-    private static final BigDecimal OVERLAP_WEIGHT = BigDecimal.valueOf(2);   // 重叠权重（基础画像与聊天标签重叠时，为了使得热点标签更突出）
-    private static final BigDecimal DEMOGRAPHIC_WEIGHT = BigDecimal.valueOf(0.2); // 人口统计标签权重（年龄标签）
-    private static final BigDecimal DECAY_FACTOR = BigDecimal.valueOf(0.5); // 衰减因子（每月衰减一半，快速使得过期失效热点数据失效）
 
     /**
      * 计算并更新总权重
@@ -66,6 +61,7 @@ public class UserTagService {
      * 设置基础权重
      */
     public void setBaseWeight(UserTags tag, BigDecimal baseWeight) {
+        ValidationUtils.validateWeight(baseWeight);
         tag.setBaseWeight(baseWeight);
         calculateTotalWeight(tag);
     }
@@ -74,6 +70,7 @@ public class UserTagService {
      * 设置融合权重
      */
     public void setFusionWeight(UserTags tag, BigDecimal fusionWeight) {
+        ValidationUtils.validateWeight(fusionWeight);
         tag.setFusionWeight(fusionWeight);
         calculateTotalWeight(tag);
     }
@@ -99,15 +96,24 @@ public class UserTagService {
 
         // 基于年龄生成标签（移除性别标签，避免标签污染）
         List<String> ageTags = getAgeTags(profile.getAge());
-
+        //去除重复标签
+        profileTags = profileTags.stream().distinct().collect(Collectors.toList());
         // 保存基础标签（职业和爱好）
         for (String tagName : profileTags) {
-            createOrUpdateProfileTag(userId, tagName);
+            String cleanTagName = ValidationUtils.cleanTagName(tagName);
+            if (cleanTagName != null) {
+                ValidationUtils.validateTagName(cleanTagName);
+                createOrUpdateProfileTag(userId, cleanTagName, UserTags.BASE_WEIGHT);
+            }
         }
 
         // 保存年龄标签（使用较低权重）
         for (String tagName : ageTags) {
-            createOrUpdateAgeTag(userId, tagName);
+            String cleanTagName = ValidationUtils.cleanTagName(tagName);
+            if (cleanTagName != null) {
+                ValidationUtils.validateTagName(cleanTagName);
+                createOrUpdateProfileTag(userId, cleanTagName, UserTags.DEMOGRAPHIC_WEIGHT);
+            }
         }
     }
 
@@ -125,16 +131,22 @@ public class UserTagService {
         List<UserTags> tagsToSave = new ArrayList<>();
 
         for (String tagName : chatTags) {
-            UserTags existingTag = tagMap.get(tagName);
+            String cleanTagName = ValidationUtils.cleanTagName(tagName);
+            if (cleanTagName == null) {
+                continue;
+            }
+            ValidationUtils.validateTagName(cleanTagName);
+
+            UserTags existingTag = tagMap.get(cleanTagName);
 
             if (existingTag != null) {
                 // 更新现有标签
-                boolean isOverlap = "PROFILE".equals(existingTag.getSourceType()) || "FUSION".equals(existingTag.getSourceType());
+                boolean isOverlap = UserTags.profileSource.equals(existingTag.getSourceType()) || UserTags.fusionSource.equals(existingTag.getSourceType());
 
                 if (isOverlap) {
                     // 重叠标签：增加融合权重
-                    setFusionWeight(existingTag, existingTag.getFusionWeight().add(OVERLAP_WEIGHT));
-                    existingTag.setSourceType("FUSION");
+                    setFusionWeight(existingTag, existingTag.getFusionWeight().add(UserTags.OVERLAP_WEIGHT));
+                    existingTag.setSourceType(UserTags.fusionSource);
                 } else {
                     // 纯聊天标签：增加聊天权重
                     incrementChatWeight(existingTag, false);
@@ -145,9 +157,9 @@ public class UserTagService {
                 // 创建新的聊天标签
                 UserTags newTag = new UserTags();
                 newTag.setUserId(userId);
-                newTag.setTagName(tagName);
-                newTag.setSourceType("CHAT");
-                newTag.setChatWeight(CHAT_WEIGHT);
+                newTag.setTagName(cleanTagName);
+                newTag.setSourceType(UserTags.chatSource);
+                newTag.setChatWeight(UserTags.CHAT_WEIGHT);
                 calculateTotalWeight(newTag);
 
                 tagsToSave.add(newTag);
@@ -159,48 +171,24 @@ public class UserTagService {
     }
 
     /**
-     * 创建或更新画像标签（职业和爱好）
-     * 我考虑到后续可能存在的修改用户个人信息（更新职业标签），不然他应该仅仅只是创建
+     * 创建或更新画像标签
      */
-    private void createOrUpdateProfileTag(Long userId, String tagName) {
+    private void createOrUpdateProfileTag(Long userId, String tagName, BigDecimal weight) {
+        ValidationUtils.validateTagName(tagName);
         Optional<UserTags> existingTag = userTagsRepository.findByUserIdAndTagName(userId, tagName);
 
         if (existingTag.isPresent()) {
             // 更新现有标签的基础权重
             UserTags tag = existingTag.get();
-            setBaseWeight(tag, BASE_WEIGHT);
+            setBaseWeight(tag, weight);
             userTagsRepository.save(tag);
         } else {
             // 创建新标签
             UserTags tag = new UserTags();
             tag.setUserId(userId);
             tag.setTagName(tagName);
-            tag.setSourceType("PROFILE");
-            setBaseWeight(tag, BASE_WEIGHT);
-            userTagsRepository.save(tag);
-        }
-    }
-
-    /**
-     * 创建或更新年龄标签（使用较低权重）
-     */
-    private void createOrUpdateAgeTag(Long userId, String tagName) {
-        Optional<UserTags> existingTag = userTagsRepository.findByUserIdAndTagName(userId, tagName);
-
-        if (existingTag.isPresent()) {
-            // 更新现有标签的基础权重
-            UserTags tag = existingTag.get();
-            tag.setBaseWeight(DEMOGRAPHIC_WEIGHT);
-            calculateTotalWeight(tag);
-            userTagsRepository.save(tag);
-        } else {
-            // 创建新标签
-            UserTags tag = new UserTags();
-            tag.setUserId(userId);
-            tag.setTagName(tagName);
-            tag.setSourceType("PROFILE");
-            tag.setBaseWeight(DEMOGRAPHIC_WEIGHT);
-            calculateTotalWeight(tag);
+            tag.setSourceType(UserTags.profileSource);
+            setBaseWeight(tag, weight);
             userTagsRepository.save(tag);
         }
     }
@@ -217,10 +205,39 @@ public class UserTagService {
      * 获取用户的热门标签（权重排序）
      */
     public List<UserTags> getHotTags(Long userId, int limit) {
+        ValidationUtils.validateRecommendationLimit(limit);
         return userTagsRepository.findByUserIdOrderByTotalWeightDesc(userId)
                 .stream()
                 .limit(limit)
                 .toList();
+    }
+
+    /**
+     * 获取用户基础画像标签名称列表（供其他服务调用）
+     */
+    public List<String> getProfileTagNames(Long userId) {
+        Optional<UserProfile> profileOpt = profileRepository.findByUserId(userId);
+        if (profileOpt.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        UserProfile profile = profileOpt.get();
+        List<String> tagNames = new ArrayList<>();
+
+        // 基于职业生成标签
+        if (profile.getOccupation() != null) {
+            tagNames.addAll(Occupation.getTagsByCode(profile.getOccupation()));
+        }
+
+        // 基于爱好生成标签
+        if (!CollectionUtils.isEmpty(profile.getHobbies())) {
+            tagNames.addAll(profile.getHobbies());
+        }
+
+        // 基于年龄生成标签（移除性别标签，避免标签污染）
+        tagNames.addAll(getAgeTags(profile.getAge()));
+
+        return tagNames;
     }
 
     /**
@@ -237,9 +254,9 @@ public class UserTagService {
 
         for (UserTags tag : allTags) {
             // 衰减所有权重
-            tag.setBaseWeight(tag.getBaseWeight().multiply(DECAY_FACTOR).setScale(2, RoundingMode.HALF_UP));
-            tag.setChatWeight(tag.getChatWeight().multiply(DECAY_FACTOR).setScale(2, RoundingMode.HALF_UP));
-            tag.setFusionWeight(tag.getFusionWeight().multiply(DECAY_FACTOR).setScale(2, RoundingMode.HALF_UP));
+            tag.setBaseWeight(tag.getBaseWeight().multiply(UserTags.DECAY_FACTOR).setScale(2, RoundingMode.HALF_UP));
+            tag.setChatWeight(tag.getChatWeight().multiply(UserTags.DECAY_FACTOR).setScale(2, RoundingMode.HALF_UP));
+            tag.setFusionWeight(tag.getFusionWeight().multiply(UserTags.DECAY_FACTOR).setScale(2, RoundingMode.HALF_UP));
 
             calculateTotalWeight(tag);
             userTagsRepository.save(tag);

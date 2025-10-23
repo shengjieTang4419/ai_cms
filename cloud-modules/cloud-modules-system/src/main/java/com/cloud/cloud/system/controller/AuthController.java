@@ -19,6 +19,7 @@ import org.springframework.web.bind.annotation.*;
 @RequiredArgsConstructor
 public class AuthController {
 
+
     private final AuthService authService;
 
     /**
@@ -43,6 +44,14 @@ public class AuthController {
     @GetMapping("/user")
     public ResponseEntity<?> getCurrentUser() {
         return authService.getCurrentUser();
+    }
+
+    /**
+     * 根据用户ID获取token（管理员接口）
+     */
+    @PostMapping("/admin/token")
+    public ResponseEntity<?> getTokenForUserId(@RequestParam Long userId, @RequestParam String password) {
+        return authService.getTokenForUserId(userId, password);
     }
 }
 

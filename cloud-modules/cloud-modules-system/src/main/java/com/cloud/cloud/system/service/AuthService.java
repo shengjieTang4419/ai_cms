@@ -12,5 +12,10 @@ public interface AuthService {
     ResponseEntity<MessageResponse> register(RegisterRequest registerRequest);
 
     ResponseEntity<?> getCurrentUser();
+
+    /**
+     * 根据用户ID获取token（管理员接口）
+     */
+    ResponseEntity<?> getTokenForUserId(Long userId, String password);
 }
 

@@ -50,10 +50,10 @@ public class UserProfile implements Serializable {
     private Integer age;
 
     /**
-     * 居住地（城市代码）
+     * 居住地
      */
     @Column(name = "location")
-    private Integer location;
+    private String location;
 
     /**
      * 职业（职业代码）

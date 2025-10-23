@@ -1,5 +1,6 @@
 package com.cloud.cloud.ai.chat.config;
 
+import com.cloud.cloud.ai.chat.mcp.service.tool.PersonalizedRecommendationTools;
 import com.cloud.cloud.ai.chat.mcp.service.tool.WeatherTools;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.tool.ToolCallbackProvider;
@@ -18,9 +19,10 @@ import org.springframework.context.annotation.Configuration;
 public class MCPConfig {
 
     @Bean
-    public ToolCallbackProvider toolCallbackProvider(WeatherTools weatherTools) {
+    public ToolCallbackProvider toolCallbackProvider(WeatherTools weatherTools, 
+                                                     PersonalizedRecommendationTools recommendationTools) {
         return MethodToolCallbackProvider.builder()
-                .toolObjects(weatherTools)
+                .toolObjects(weatherTools, recommendationTools)
                 .build();
     }
 }

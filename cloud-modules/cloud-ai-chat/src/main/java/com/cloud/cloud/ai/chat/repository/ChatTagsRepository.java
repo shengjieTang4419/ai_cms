@@ -22,10 +22,6 @@ public interface ChatTagsRepository extends JpaRepository<ChatTags, Long> {
      */
     List<ChatTags> findByUserIdOrderByCreatedAtDesc(Long userId);
 
-    /**
-     * 根据会话ID查找聊天标签
-     */
-    List<ChatTags> findBySessionIdOrderByWeightDesc(String sessionId);
 
     /**
      * 根据用户ID和标签名查找
@@ -36,8 +32,8 @@ public interface ChatTagsRepository extends JpaRepository<ChatTags, Long> {
      * 统计用户标签频率
      */
     @Query("SELECT ct.tagName, SUM(ct.frequency) as totalFrequency " +
-           "FROM ChatTags ct WHERE ct.userId = :userId " +
-           "GROUP BY ct.tagName ORDER BY totalFrequency DESC")
+            "FROM ChatTags ct WHERE ct.userId = :userId " +
+            "GROUP BY ct.tagName ORDER BY totalFrequency DESC")
     List<Object[]> findTagFrequencyByUserId(@Param("userId") Long userId);
 
     /**

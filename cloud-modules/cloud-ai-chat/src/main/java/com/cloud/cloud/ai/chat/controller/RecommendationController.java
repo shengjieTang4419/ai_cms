@@ -1,6 +1,7 @@
 package com.cloud.cloud.ai.chat.controller;
 
 import com.cloud.cloud.ai.chat.domain.UserTags;
+import com.cloud.cloud.ai.chat.service.RecommendationService;
 import com.cloud.cloud.ai.chat.service.UserProfileService;
 import com.cloud.cloud.ai.chat.util.ValidationUtils;
 import lombok.RequiredArgsConstructor;
@@ -25,31 +26,27 @@ import java.util.Map;
 public class RecommendationController {
 
     private final UserProfileService userProfileService;
+    private final RecommendationService recommendationService;
 
     /**
-     * 获取用户个性化推荐（首页使用）
+     * 获取用户个性化推荐（首页使用）- 基于AI生成推荐提问
      */
     @GetMapping("/personalized/{userId}")
     public ResponseEntity<Map<String, Object>> getPersonalizedRecommendations(
             @PathVariable Long userId,
             @RequestParam(defaultValue = "5") int limit) {
-        
-        log.info("获取用户个性化推荐，userId: {}, limit: {}", userId, limit);
-        
+
+        log.info("获取用户个性化推荐（AI生成），userId: {}, limit: {}", userId, limit);
+
         try {
             // 验证参数
             ValidationUtils.validateRecommendationLimit(limit);
-            
-            // 获取用户热门标签
-            List<UserTags> hotTags = userProfileService.getHotTags(userId, limit);
-            
-            Map<String, Object> response = new HashMap<>();
-            response.put("userId", userId);
-            response.put("recommendations", hotTags);
-            response.put("total", hotTags.size());
-            
-            return ResponseEntity.ok(response);
-            
+
+            // 调用推荐服务生成个性化推荐
+            Map<String, Object> recommendations = recommendationService.generatePersonalizedRecommendations(userId, limit);
+
+            return ResponseEntity.ok(recommendations);
+
         } catch (Exception e) {
             log.error("获取个性化推荐失败", e);
             Map<String, Object> errorResponse = new HashMap<>();

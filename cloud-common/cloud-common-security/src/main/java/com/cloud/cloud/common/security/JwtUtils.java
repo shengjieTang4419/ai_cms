@@ -1,11 +1,7 @@
 package com.cloud.cloud.common.security;
 
 import com.cloud.cloud.common.security.dto.CustomerUserDetail;
-import io.jsonwebtoken.Claims;
-import io.jsonwebtoken.ExpiredJwtException;
-import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.MalformedJwtException;
-import io.jsonwebtoken.UnsupportedJwtException;
+import io.jsonwebtoken.*;
 import io.jsonwebtoken.security.Keys;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.core.Authentication;
@@ -26,7 +22,7 @@ public class JwtUtils {
 
     @Value("${jwt.expiration:86400}")
     private int jwtExpirationMs;
-    
+
     private static final String CLAIM_USER_ID = "userId";
 
     private SecretKey getSigningKey() {
@@ -35,7 +31,7 @@ public class JwtUtils {
 
     public String generateJwtToken(Authentication authentication) {
         UserDetails userPrincipal = (UserDetails) authentication.getPrincipal();
-        
+
         // 如果是 CustomerUserDetail，则在 JWT 中存储 userId
         Long userId = null;
         if (userPrincipal instanceof CustomerUserDetail) {
@@ -46,21 +42,12 @@ public class JwtUtils {
                 .subject((userPrincipal.getUsername()))
                 .issuedAt(new Date())
                 .expiration(new Date((new Date()).getTime() + jwtExpirationMs * 1000L));
-        
+
         if (userId != null) {
             builder.claim(CLAIM_USER_ID, userId);
         }
-        
-        return builder.signWith(getSigningKey()).compact();
-    }
 
-    public String generateTokenFromUsername(String username) {
-        return Jwts.builder()
-                .subject(username)
-                .issuedAt(new Date())
-                .expiration(new Date((new Date()).getTime() + jwtExpirationMs * 1000L))
-                .signWith(getSigningKey())
-                .compact();
+        return builder.signWith(getSigningKey()).compact();
     }
 
     public String getUserNameFromJwtToken(String token) {
@@ -71,7 +58,7 @@ public class JwtUtils {
                 .getPayload()
                 .getSubject();
     }
-    
+
     /**
      * 从JWT token中获取userId
      */
@@ -81,7 +68,7 @@ public class JwtUtils {
                 .build()
                 .parseSignedClaims(token)
                 .getPayload();
-        
+
         Object userIdObj = claims.get(CLAIM_USER_ID);
         if (userIdObj != null) {
             if (userIdObj instanceof Integer) {

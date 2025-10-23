@@ -16,7 +16,7 @@ public class UserProfileRequest {
     private Long userId;
     private String gender;
     private Integer age;
-    private Integer location;
+    private String location;
     private Integer occupation;
     private List<String> hobbies;
 }
