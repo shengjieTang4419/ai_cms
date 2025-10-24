@@ -73,6 +73,13 @@
             <artifactId>cloud-common-security</artifactId>
             <version>${revision}</version>
         </dependency>
+        
+        <!-- Redis缓存模块 -->
+        <dependency>
+            <groupId>com.cloud</groupId>
+            <artifactId>cloud-common-redis</artifactId>
+            <version>${revision}</version>
+        </dependency>
         <!-- 系统管理模块 -->
         <dependency>
             <groupId>com.cloud</groupId>

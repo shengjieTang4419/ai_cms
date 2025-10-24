@@ -55,7 +55,9 @@ public class ChatMessageService {
      */
     public List<ChatMessage> getSessionHistory(String sessionId) {
         try {
-            return chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+            List<ChatMessage> chatMessages = chatMessageRepository.findBySessionIdOrderByCreatedAtAsc(sessionId);
+            log.info("chatMessages = {}", chatMessages);
+            return chatMessages;
         } catch (Exception e) {
             log.error("获取会话历史记录失败: sessionId={}", sessionId, e);
             return List.of();

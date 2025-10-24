@@ -1,11 +1,11 @@
 package com.cloud.cloud.ai.chat.mcp.service.tool;
 
+import com.cloud.cloud.ai.chat.domain.Occupation;
 import com.cloud.cloud.ai.chat.domain.UserProfile;
 import com.cloud.cloud.ai.chat.domain.UserTags;
 import com.cloud.cloud.ai.chat.repository.UserProfileRepository;
 import com.cloud.cloud.ai.chat.repository.UserTagsRepository;
 import com.cloud.cloud.ai.chat.util.ValidationUtils;
-import com.cloud.cloud.common.security.SecurityUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.tool.annotation.Tool;
@@ -75,7 +75,8 @@ public class PersonalizedRecommendationTools {
                         profile.getAge() != null ? profile.getAge() : "未知"));
 
                 if (profile.getOccupation() != null) {
-                    result.append(String.format("，%s", getOccupationName(profile.getOccupation())));
+                    String occupationName = Occupation.fromCode(profile.getOccupation()).getName();
+                    result.append(String.format("，%s", occupationName));
                 }
                 result.append("\n");
 
@@ -163,13 +164,12 @@ public class PersonalizedRecommendationTools {
         }
     }
 
-    @Tool(name = "suggest_follow_up_topics",
-            description = "基于当前对话和用户兴趣，智能推荐相关话题")
-    public String suggestFollowUpTopics(
-            @ToolParam(description = "当前对话主题") String currentTopic) {
+    //    @Tool(name = "suggest_follow_up_topics",
+//            description = "基于当前对话和用户兴趣，智能推荐相关话题")
+    public List<String> suggestFollowUpTopics(
+            @ToolParam(description = "当前对话主题") String currentTopic, Long userId) {
 
         // 自动获取当前用户ID
-        Long userId = SecurityUtils.getCurrentUserId();
         log.info("AI 调用工具：推荐相关话题，userId={}, currentTopic={}", userId, currentTopic);
 
         try {
@@ -177,7 +177,7 @@ public class PersonalizedRecommendationTools {
             List<UserTags> userTags = userTagsRepository.findByUserIdOrderByTotalWeightDesc(userId);
 
             if (userTags.isEmpty()) {
-                return "基于您当前的兴趣，我建议您可以了解更多关于 " + currentTopic + " 的相关知识。";
+                return new ArrayList<>();
             }
 
             // 使用AI找到与当前话题相关的标签
@@ -187,21 +187,15 @@ public class PersonalizedRecommendationTools {
                 // 如果没有直接相关的，推荐用户最感兴趣的话题
                 relatedTags = userTags.stream().limit(3).toList();
             }
-
-            StringBuilder result = new StringBuilder();
-            result.append("基于您的兴趣和当前话题，我推荐您了解：\n\n");
-
-            for (int i = 0; i < relatedTags.size(); i++) {
-                UserTags tag = relatedTags.get(i);
+            List<String> suggestTopics = new ArrayList<>();
+            for (UserTags tag : relatedTags) {
                 String suggestion = generateFollowUpSuggestionWithAI(tag.getTagName(), currentTopic);
-                result.append(String.format("%d. %s\n", i + 1, suggestion));
+                suggestTopics.add(suggestion);
             }
-
-            return result.toString();
-
+            return suggestTopics;
         } catch (Exception e) {
             log.error("推荐相关话题失败", e);
-            return "我建议您可以继续深入了解 " + currentTopic + " 的相关知识。";
+            return new ArrayList<>();
         }
     }
 
@@ -335,7 +329,7 @@ public class PersonalizedRecommendationTools {
             List<String> relatedTagNameList = Arrays.stream(relatedTagNames)
                     .map(String::trim)
                     .filter(name -> !name.isEmpty())
-                    .collect(Collectors.toList());
+                    .toList();
 
             // 找到对应的UserTags对象
             return userTags.stream()

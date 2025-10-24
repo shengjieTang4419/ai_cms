@@ -2,6 +2,7 @@ package com.cloud.cloud.ai.chat.service;
 
 
 import com.cloud.cloud.ai.chat.helper.ChatAnalysisHelper;
+import com.cloud.cloud.ai.chat.mcp.service.tool.PersonalizedRecommendationTools;
 import com.cloud.cloud.common.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -34,6 +35,7 @@ public class AIChatService {
     private final ChatMessageService chatMessageService;
     private final PgVectorStore vectorStore;
     private final ChatAnalysisHelper chatAnalysisHelper;
+    private final PersonalizedRecommendationTools recommendationTools;
 
 
     public String simpleChat(String query) {
@@ -62,15 +64,74 @@ public class AIChatService {
             chatTitleService.createSessionWithTitle(userId, sessionId, query);
         }
         StringBuilder fullResponse = new StringBuilder();
-        return contentFlux
+
+        // 主响应流
+        Flux<String> mainResponseFlux = contentFlux
                 .doOnNext(fullResponse::append)
                 .doOnComplete(() -> {
                     chatMessageService.saveUserMessage(sessionId, userId, originQuery);
                     chatMessageService.saveAssistantMessage(sessionId, userId, fullResponse.toString(), isRagEnhanced);
-                    
+
                     // 异步分析聊天内容并更新用户标签
                     analyzeChatContentAsync(userId, sessionId, originQuery, fullResponse.toString());
                 });
+
+        // 在主响应完成后，追加个性化推荐
+        return mainResponseFlux.concatWith(Flux.defer(() -> {
+            try {
+                log.info("开始生成个性化推荐，userId: {}, sessionId: {}, query: {}", userId, sessionId, originQuery);
+
+                // 调用推荐工具
+                List<String> recommendations = recommendationTools.suggestFollowUpTopics(originQuery, userId);
+
+                if (!CollectionUtils.isEmpty(recommendations)) {
+                    log.info("个性化推荐生成成功");
+                    // 格式化推荐内容，使其更自然
+                    String formattedRecommendations = formatRecommendations(recommendations);
+
+                    // 返回格式化后的推荐内容
+                    return Flux.just(formattedRecommendations);
+                }
+
+                return Flux.empty();
+
+            } catch (Exception e) {
+                log.error("生成个性化推荐失败，userId: {}, sessionId: {}", userId, sessionId, e);
+                return Flux.empty();
+            }
+        }));
+    }
+
+    /**
+     * 格式化推荐内容，使其更加自然和友好
+     */
+    private String formatRecommendations(List<String> recommendations) {
+        if (CollectionUtils.isEmpty(recommendations)) {
+            return "";
+        }
+
+        // 取前3个推荐（如果有的话）
+        int count = Math.min(recommendations.size(), 3);
+        List<String> topRecommendations = recommendations.subList(0, count);
+
+        StringBuilder result = new StringBuilder("\n\n要不我们聊点其他的？");
+
+        for (int i = 0; i < topRecommendations.size(); i++) {
+            String item = topRecommendations.get(i).trim();
+            
+            if (i == 0) {
+                // 第一个：比如...
+                result.append("比如").append(item).append("？");
+            } else if (i == topRecommendations.size() - 1) {
+                // 最后一个：或者...
+                result.append("或者").append(item).append("？");
+            } else {
+                // 中间的：、...
+                result.append("、").append(item);
+            }
+        }
+
+        return result.toString();
     }
 
 
@@ -102,10 +163,10 @@ public class AIChatService {
         try {
             // 合并用户问题和AI回答作为分析内容
             String combinedContent = String.format("用户问题：%s\nAI回答：%s", userQuery, assistantResponse);
-            
+
             // 分析聊天内容并更新标签
             chatAnalysisHelper.analyzeChatSession(userId, sessionId, combinedContent);
-            
+
             log.info("聊天内容分析完成，userId: {}, sessionId: {}", userId, sessionId);
         } catch (Exception e) {
             log.error("聊天内容分析失败，userId: {}, sessionId: {}", userId, sessionId, e);
