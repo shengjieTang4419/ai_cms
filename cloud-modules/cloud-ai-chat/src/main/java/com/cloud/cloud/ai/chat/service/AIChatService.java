@@ -16,6 +16,8 @@ import org.springframework.util.CollectionUtils;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -57,6 +59,17 @@ public class AIChatService {
 
     private Flux<String> streamChat(String query, String sessionId, boolean isRagEnhanced, String originQuery) {
         Long userId = SecurityUtils.getCurrentUserId();
+
+        log.info("异步生成个性化推荐，userId: {}, sessionId: {}, query: {}", userId, sessionId, originQuery);
+        CompletableFuture<List<String>> recommendationsFuture = CompletableFuture.supplyAsync(() -> {
+            try {
+                return recommendationTools.suggestFollowUpTopics(originQuery, userId);
+            } catch (Exception e) {
+                log.error("生成个性化推荐失败，userId: {}, sessionId: {}", userId, sessionId, e);
+                return null;
+            }
+        });
+
         Flux<String> contentFlux = chatClient.prompt(query)
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, sessionId))
                 .stream().content();
@@ -64,41 +77,41 @@ public class AIChatService {
             chatTitleService.createSessionWithTitle(userId, sessionId, query);
         }
         StringBuilder fullResponse = new StringBuilder();
+        StringBuilder recommendations = new StringBuilder();
 
         // 主响应流
         Flux<String> mainResponseFlux = contentFlux
                 .doOnNext(fullResponse::append)
                 .doOnComplete(() -> {
+                    // 尝试获取推荐结果（设置超时时间，避免阻塞）
+                    try {
+                        List<String> recommendationList = recommendationsFuture.get(500, TimeUnit.MILLISECONDS);
+                        if (!CollectionUtils.isEmpty(recommendationList)) {
+                            String formattedRecommendations = formatRecommendations(recommendationList);
+                            recommendations.append(formattedRecommendations);
+                            log.info("个性化推荐已获取并将追加到响应中");
+                        } else {
+                            log.info("个性化推荐为空");
+                        }
+                    } catch (Exception e) {
+                        log.warn("获取个性化推荐超时或失败，将不包含推荐内容: {}", e.getMessage());
+                    }
+
+                    // 保存消息（包含推荐内容）
                     chatMessageService.saveUserMessage(sessionId, userId, originQuery);
-                    chatMessageService.saveAssistantMessage(sessionId, userId, fullResponse.toString(), isRagEnhanced);
+                    String completeResponse = fullResponse + recommendations.toString();
+                    chatMessageService.saveAssistantMessage(sessionId, userId, completeResponse, isRagEnhanced);
 
                     // 异步分析聊天内容并更新用户标签
-                    analyzeChatContentAsync(userId, sessionId, originQuery, fullResponse.toString());
+                    analyzeChatContentAsync(userId, sessionId, originQuery, completeResponse);
                 });
 
-        // 在主响应完成后，追加个性化推荐
+        // 如果有推荐内容，追加到流中
         return mainResponseFlux.concatWith(Flux.defer(() -> {
-            try {
-                log.info("开始生成个性化推荐，userId: {}, sessionId: {}, query: {}", userId, sessionId, originQuery);
-
-                // 调用推荐工具
-                List<String> recommendations = recommendationTools.suggestFollowUpTopics(originQuery, userId);
-
-                if (!CollectionUtils.isEmpty(recommendations)) {
-                    log.info("个性化推荐生成成功");
-                    // 格式化推荐内容，使其更自然
-                    String formattedRecommendations = formatRecommendations(recommendations);
-
-                    // 返回格式化后的推荐内容
-                    return Flux.just(formattedRecommendations);
-                }
-
-                return Flux.empty();
-
-            } catch (Exception e) {
-                log.error("生成个性化推荐失败，userId: {}, sessionId: {}", userId, sessionId, e);
-                return Flux.empty();
+            if (!recommendations.isEmpty()) {
+                return Flux.just(recommendations.toString());
             }
+            return Flux.empty();
         }));
     }
 
@@ -118,7 +131,7 @@ public class AIChatService {
 
         for (int i = 0; i < topRecommendations.size(); i++) {
             String item = topRecommendations.get(i).trim();
-            
+
             if (i == 0) {
                 // 第一个：比如...
                 result.append("比如").append(item).append("？");

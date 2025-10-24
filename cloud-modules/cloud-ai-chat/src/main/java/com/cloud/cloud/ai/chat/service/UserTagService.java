@@ -1,6 +1,5 @@
 package com.cloud.cloud.ai.chat.service;
 
-import com.cloud.cloud.ai.chat.domain.Occupation;
 import com.cloud.cloud.ai.chat.domain.UserProfile;
 import com.cloud.cloud.ai.chat.domain.UserTags;
 import com.cloud.cloud.ai.chat.repository.UserProfileRepository;
@@ -35,6 +34,7 @@ public class UserTagService {
 
     private final UserTagsRepository userTagsRepository;
     private final UserProfileRepository profileRepository;
+    private final OccupationService occupationService;
 
 
     /**
@@ -86,7 +86,7 @@ public class UserTagService {
 
         // 基于职业生成标签
         if (profile.getOccupation() != null) {
-            profileTags.addAll(Occupation.getTagsByCode(profile.getOccupation()));
+            profileTags.addAll(occupationService.getTagsByCode(profile.getOccupation()));
         }
 
         // 基于爱好生成标签
@@ -226,7 +226,7 @@ public class UserTagService {
 
         // 基于职业生成标签
         if (profile.getOccupation() != null) {
-            tagNames.addAll(Occupation.getTagsByCode(profile.getOccupation()));
+            tagNames.addAll(occupationService.getTagsByCode(profile.getOccupation()));
         }
 
         // 基于爱好生成标签

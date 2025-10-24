@@ -1,10 +1,11 @@
 package com.cloud.cloud.ai.chat.mcp.service.tool;
 
-import com.cloud.cloud.ai.chat.domain.Occupation;
+import com.cloud.cloud.ai.chat.domain.OccupationEntity;
 import com.cloud.cloud.ai.chat.domain.UserProfile;
 import com.cloud.cloud.ai.chat.domain.UserTags;
 import com.cloud.cloud.ai.chat.repository.UserProfileRepository;
 import com.cloud.cloud.ai.chat.repository.UserTagsRepository;
+import com.cloud.cloud.ai.chat.service.OccupationService;
 import com.cloud.cloud.ai.chat.util.ValidationUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -34,15 +35,18 @@ public class PersonalizedRecommendationTools {
 
     private final UserProfileRepository profileRepository;
     private final UserTagsRepository userTagsRepository;
+    private final OccupationService occupationService;
 
     @Autowired
     @Lazy
     private ChatClient chatClient;
 
     public PersonalizedRecommendationTools(UserProfileRepository profileRepository,
-                                           UserTagsRepository userTagsRepository) {
+                                           UserTagsRepository userTagsRepository,
+                                           OccupationService occupationService) {
         this.profileRepository = profileRepository;
         this.userTagsRepository = userTagsRepository;
+        this.occupationService = occupationService;
     }
 
     @Tool(name = "get_personalized_recommendations",
@@ -75,7 +79,9 @@ public class PersonalizedRecommendationTools {
                         profile.getAge() != null ? profile.getAge() : "未知"));
 
                 if (profile.getOccupation() != null) {
-                    String occupationName = Occupation.fromCode(profile.getOccupation()).getName();
+                    String occupationName = occupationService.getByCode(profile.getOccupation())
+                            .map(OccupationEntity::getName)
+                            .orElse("未知职业");
                     result.append(String.format("，%s", occupationName));
                 }
                 result.append("\n");
@@ -280,18 +286,6 @@ public class PersonalizedRecommendationTools {
             return "关于 " + tagName + " 的问题";
         }
     }
-
-    /**
-     * 获取职业名称
-     */
-    private String getOccupationName(Integer occupation) {
-        Map<Integer, String> occupationMap = Map.of(
-                1, "程序员", 2, "设计师", 3, "教师", 4, "医生",
-                5, "销售", 6, "金融", 7, "媒体", 8, "法律"
-        );
-        return occupationMap.getOrDefault(occupation, "未知职业");
-    }
-
 
     /**
      * 使用AI找到与当前话题相关的标签
