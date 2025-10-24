@@ -3,11 +3,14 @@ package com.cloud.cloud.ai.chat.service;
 import com.cloud.cloud.ai.chat.domain.UserProfile;
 import com.cloud.cloud.ai.chat.domain.UserProfileRequest;
 import com.cloud.cloud.ai.chat.domain.UserTags;
+import com.cloud.cloud.ai.chat.domain.UserTagsDimension;
 import com.cloud.cloud.ai.chat.repository.UserProfileRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
+import org.springframework.util.CollectionUtils;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -61,7 +64,18 @@ public class UserProfileService {
      * 获取用户画像
      */
     public UserProfile getUserProfile(Long userId) {
-        return profileRepository.findByUserId(userId).orElse(null);
+        UserProfile userProfile = profileRepository.findByUserId(userId).orElse(null);
+        List<UserTags> hotTags = userTagService.getHotTags(userId, 5);
+        if (CollectionUtils.isEmpty(hotTags) || userProfile == null) {
+            return userProfile;
+        }
+        List<UserTagsDimension> tagsDimensions = new ArrayList<>();
+        for (UserTags tag : hotTags) {
+            UserTagsDimension tagsDimension = UserTagsDimension.builder().tagName(tag.getTagName()).totalWeight(tag.getTotalWeight()).build();
+            tagsDimensions.add(tagsDimension);
+        }
+        userProfile.setUserTagsDimensions(tagsDimensions);
+        return userProfile;
     }
 
     /**

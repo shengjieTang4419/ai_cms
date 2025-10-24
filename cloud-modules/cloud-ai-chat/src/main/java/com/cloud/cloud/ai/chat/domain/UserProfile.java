@@ -9,6 +9,7 @@ import org.hibernate.type.SqlTypes;
 
 import java.io.Serializable;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -81,4 +82,8 @@ public class UserProfile implements Serializable {
     @UpdateTimestamp
     @Column(name = "updated_at")
     private LocalDateTime updatedAt;
+
+
+    @Transient
+    private List<UserTagsDimension> userTagsDimensions = new ArrayList<>();
 }
