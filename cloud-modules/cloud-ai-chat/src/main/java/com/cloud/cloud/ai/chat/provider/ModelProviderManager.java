@@ -32,39 +32,64 @@ public class ModelProviderManager {
     public void init() {
         log.info("🚀 开始加载ModelProvider实现...");
 
-        // 从Spring容器中获取所有ModelProvider实现
-        Map<String, ModelProvider> providerBeans = applicationContext.getBeansOfType(ModelProvider.class);
+        try {
+            // 从Spring容器中获取所有ModelProvider实现
+            // 使用getBeanNamesForType先获取名称，避免在初始化阶段触发bean创建
+            String[] beanNames = applicationContext.getBeanNamesForType(ModelProvider.class, false, false);
+            log.info("发现 {} 个ModelProvider实现类", beanNames.length);
 
-        log.info("发现 {} 个ModelProvider实现", providerBeans.size());
+            // 逐个获取bean实例
+            List<ModelProvider> allProviders = new ArrayList<>();
+            for (String beanName : beanNames) {
+                try {
+                    ModelProvider provider = applicationContext.getBean(beanName, ModelProvider.class);
+                    allProviders.add(provider);
+                    log.debug("成功加载Provider: {}", beanName);
+                } catch (Exception e) {
+                    log.warn("加载Provider失败: {}，错误: {}", beanName, e.getMessage());
+                }
+            }
 
-        // 过滤并排序
-        List<ModelProvider> enabledProviders = providerBeans.values().stream()
-                .filter(ModelProvider::isEnabled)
-                .sorted(Comparator.comparingInt(ModelProvider::getPriority))
-                .toList();
+            log.info("成功加载 {} 个ModelProvider实现", allProviders.size());
 
-        // 注册所有Provider
-        for (ModelProvider provider : enabledProviders) {
-            providers.put(provider.getModelName(), provider);
-            log.info("✅ 注册模型: {} - {} (优先级: {})",
-                    provider.getModelName(),
-                    provider.getDisplayName(),
-                    provider.getPriority());
+            // 过滤并排序
+            List<ModelProvider> enabledProviders = allProviders.stream()
+                    .filter(ModelProvider::isEnabled)
+                    .sorted(Comparator.comparingInt(ModelProvider::getPriority))
+                    .toList();
+
+            if (enabledProviders.isEmpty()) {
+                log.error("❌ 没有可用的ModelProvider实现！请检查配置。");
+                throw new IllegalStateException("没有可用的ModelProvider实现，系统无法启动");
+            }
+
+            // 注册所有Provider
+            for (ModelProvider provider : enabledProviders) {
+                providers.put(provider.getModelName(), provider);
+                log.info("✅ 注册模型: {} - {} (优先级: {})",
+                        provider.getModelName(),
+                        provider.getDisplayName(),
+                        provider.getPriority());
+            }
+
+            // 选择默认Provider：优先选择非Vision模型，如果没有则选择优先级最高的
+            defaultProvider = enabledProviders.stream()
+                    .filter(p -> !p.supportsVision())
+                    .findFirst()
+                    .orElse(enabledProviders.get(0));
+            
+            log.info("📊 Provider优先级排序: {}", 
+                    enabledProviders.stream()
+                        .map(p -> p.getModelName() + "(" + p.getPriority() + ")")
+                        .collect(java.util.stream.Collectors.joining(" -> ")));
+
+            log.info("🎯 默认模型: {} - {}",
+                    defaultProvider.getModelName(),
+                    defaultProvider.getDisplayName());
+        } catch (Exception e) {
+            log.error("❌ ModelProvider初始化失败: {}", e.getMessage(), e);
+            throw new RuntimeException("ModelProvider初始化失败: " + e.getMessage(), e);
         }
-
-        defaultProvider = enabledProviders.stream()
-                .filter(p -> !p.supportsVision())
-                .findFirst()
-                .orElse(enabledProviders.get(0));
-        
-        log.info("📊 Provider优先级排序: {}", 
-                enabledProviders.stream()
-                    .map(p -> p.getModelName() + "(" + p.getPriority() + ")")
-                    .collect(java.util.stream.Collectors.joining(" -> ")));
-
-        log.info("🎯 默认模型: {} - {}",
-                defaultProvider.getModelName(),
-                defaultProvider.getDisplayName());
     }
 
     /**

@@ -73,7 +73,7 @@
             <artifactId>cloud-common-security</artifactId>
             <version>${revision}</version>
         </dependency>
-        
+
         <!-- Redis缓存模块 -->
         <dependency>
             <groupId>com.cloud</groupId>
@@ -96,6 +96,25 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-webflux</artifactId>
+        </dependency>
+
+        <!-- MinIO 对象存储 -->
+        <dependency>
+            <groupId>io.minio</groupId>
+            <artifactId>minio</artifactId>
+        </dependency>
+
+        <!-- DashScope SDK-->
+        <dependency>
+            <groupId>com.alibaba</groupId>
+            <artifactId>dashscope-sdk-java</artifactId>
+        </dependency>
+
+        <!-- JSON Schema Generator for MethodToolCallbackProvider -->
+        <dependency>
+            <groupId>com.github.victools</groupId>
+            <artifactId>jsonschema-generator</artifactId>
+            <version>4.37.0</version>
         </dependency>
     </dependencies>
 

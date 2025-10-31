@@ -6,6 +6,7 @@ import org.springframework.data.mongodb.core.mapping.Document;
 import org.springframework.data.mongodb.core.mapping.Field;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 聊天消息实体 - 用于存储纯净的历史记录
@@ -42,6 +43,14 @@ public class ChatMessage {
     @Field("is_rag_enhanced")
     private Boolean isRagEnhanced = false;
 
+    /**
+     * 图片URL列表（仅用于用户消息）
+     * 注意：OCR结果不存储在这里，只存储图片URL
+     * OCR结果只在发送消息时用于LLM输入，不持久化
+     */
+    @Field("image_urls")
+    private List<String> imageUrls;
+
     public enum MessageType {
         USER, ASSISTANT
     }
@@ -61,5 +70,15 @@ public class ChatMessage {
     public ChatMessage(String sessionId, Long userId, MessageType messageType, String content, Boolean isRagEnhanced) {
         this(sessionId, userId, messageType, content);
         this.isRagEnhanced = isRagEnhanced;
+    }
+
+    public ChatMessage(String sessionId, Long userId, MessageType messageType, String content, List<String> imageUrls) {
+        this(sessionId, userId, messageType, content);
+        this.imageUrls = imageUrls;
+    }
+
+    public ChatMessage(String sessionId, Long userId, MessageType messageType, String content, Boolean isRagEnhanced, List<String> imageUrls) {
+        this(sessionId, userId, messageType, content, isRagEnhanced);
+        this.imageUrls = imageUrls;
     }
 }

@@ -6,6 +6,8 @@ import com.cloud.cloud.ai.chat.domain.UserTags;
 import com.cloud.cloud.ai.chat.repository.UserProfileRepository;
 import com.cloud.cloud.ai.chat.repository.UserTagsRepository;
 import com.cloud.cloud.ai.chat.service.OccupationService;
+import com.cloud.cloud.ai.chat.provider.ModelProvider;
+import com.cloud.cloud.ai.chat.provider.ModelProviderManager;
 import com.cloud.cloud.ai.chat.util.ValidationUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -26,7 +28,7 @@ import java.util.stream.Collectors;
 /**
  * @author shengjie.tang
  * @version 1.0.0
- * @description: 个性化推荐工具 - 基于用户画像和聊天行为
+ * @description: 个性化推荐工具 - 基于用户画像和聊天行为（使用SPI）
  * @date 2025/10/14 15:30
  */
 @Component
@@ -39,7 +41,15 @@ public class PersonalizedRecommendationTools {
 
     @Autowired
     @Lazy
-    private ChatClient chatClient;
+    private ModelProviderManager providerManager;
+
+    /**
+     * 获取默认ChatClient
+     */
+    private ChatClient getChatClient() {
+        ModelProvider defaultProvider = providerManager.getDefaultProvider();
+        return defaultProvider.getChatClient();
+    }
 
     public PersonalizedRecommendationTools(UserProfileRepository profileRepository,
                                            UserTagsRepository userTagsRepository,
@@ -278,7 +288,7 @@ public class PersonalizedRecommendationTools {
                     生成的问题：
                     """, tagName, tagName);
 
-            String response = chatClient.prompt(prompt).call().content();
+            String response = getChatClient().prompt(prompt).call().content();
             return response != null ? response.trim() : "关于 " + tagName + " 的问题";
 
         } catch (Exception e) {
@@ -312,7 +322,7 @@ public class PersonalizedRecommendationTools {
                     相关标签：
                     """, currentTopic, tagList, currentTopic);
 
-            String response = chatClient.prompt(prompt).call().content();
+            String response = getChatClient().prompt(prompt).call().content();
 
             if (response == null || response.trim().isEmpty()) {
                 return new ArrayList<>();
@@ -357,7 +367,7 @@ public class PersonalizedRecommendationTools {
                     生成的建议：
                     """, currentTopic, tagName, currentTopic, tagName);
 
-            String response = chatClient.prompt(prompt).call().content();
+            String response = getChatClient().prompt(prompt).call().content();
             return response != null ? response.trim() : "您是否想了解更多关于 " + tagName + " 的知识？";
 
         } catch (Exception e) {

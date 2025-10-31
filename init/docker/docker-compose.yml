@@ -59,5 +59,28 @@ services:
       - "timezone=Asia/Shanghai"
     networks:
       - cloud-network
+
+  cloud-minio:
+    image: minio/minio:latest
+    container_name: cloud-minio
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin123
+      TZ: Asia/Shanghai
+    volumes:
+      - ./minio/data:/data
+      - ./minio/config:/root/.minio
+    ports:
+      - "9000:9000" # API端口
+      - "9001:9001" # Console端口
+    command: server /data --console-address ":9001"
+    networks:
+      - cloud-network
+    healthcheck:
+      test: [ "CMD", "curl", "-f", "http://localhost:9000/minio/health/live" ]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+
 networks:
   cloud-network:

@@ -1,5 +1,6 @@
 package com.cloud.cloud.ai.chat.util;
 
+import com.cloud.cloud.ai.chat.dto.ChatContext;
 import com.cloud.cloud.ai.chat.provider.ModelProvider;
 import com.cloud.cloud.ai.chat.provider.ModelProviderManager;
 import lombok.RequiredArgsConstructor;
@@ -24,8 +25,23 @@ public class ModelSelector {
     private final ModelProviderManager providerManager;
 
     /**
-     * 根据是否有图片选择模型（支持多张图片）
+     * 根据聊天上下文选择合适的模型
+     * 优先级：OCR处理过的图片 > 文本模型
      */
+    public ModelProvider selectModelProvider(ChatContext context) {
+        // 当前策略：即使有图片，如果已经通过OCR提取了文字，也使用文本模型
+        // 因为图片内容已经转化为文字，不需要使用视觉模型
+        ModelProvider provider = providerManager.getDefaultProvider();
+        log.info("根据上下文选择模型: {} (hasImages: {}, ragEnhanced: {})", 
+                provider.getModelName(), context.hasImages(), context.isRagEnhanced());
+        return provider;
+    }
+
+    /**
+     * 根据是否有图片选择模型（支持多张图片）
+     * @deprecated 使用 selectModelProvider(ChatContext) 替代
+     */
+    @Deprecated
     public String selectModel(List<String> imageUrls) {
         if (imageUrls != null && !imageUrls.isEmpty()) {
             ModelProvider visionProvider = providerManager.getProviderByCapability(true);

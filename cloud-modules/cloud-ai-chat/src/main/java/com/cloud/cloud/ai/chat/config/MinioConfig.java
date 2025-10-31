@@ -34,3 +34,7 @@ public class MinioConfig {
 }
 
 
+
+
+
+

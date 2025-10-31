@@ -2,8 +2,9 @@ package com.cloud.cloud.ai.chat.service;
 
 
 import com.cloud.cloud.ai.chat.domain.ChatSession;
+import com.cloud.cloud.ai.chat.provider.ModelProvider;
+import com.cloud.cloud.ai.chat.provider.ModelProviderManager;
 import com.cloud.cloud.ai.chat.repository.ChatSessionRepository;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.scheduling.annotation.Async;
@@ -15,16 +16,29 @@ import java.util.Optional;
 /**
  * @author shengjie.tang
  * @version 1.0.0
- * @description:
+ * @description: 会话标题服务 - 使用SPI获取模型
  * @date 2025/9/24 21:51
  */
 @Slf4j
 @Service
-@RequiredArgsConstructor
 public class ChatTitleService {
 
     private final ChatSessionRepository chatSessionRepository;
-    private final ChatClient chatClient;
+    private final ModelProviderManager providerManager;
+
+    public ChatTitleService(ChatSessionRepository chatSessionRepository, 
+                           ModelProviderManager providerManager) {
+        this.chatSessionRepository = chatSessionRepository;
+        this.providerManager = providerManager;
+    }
+
+    /**
+     * 获取默认ChatClient
+     */
+    private ChatClient getChatClient() {
+        ModelProvider defaultProvider = providerManager.getDefaultProvider();
+        return defaultProvider.getChatClient();
+    }
 
     /**
      * 创建新会话并生成初始标题
@@ -62,7 +76,7 @@ public class ChatTitleService {
                             "3. 直接返回标题，不要额外解释\n\n" +
                             "用户问题：%s", firstQuery);
 
-            String intelligentTitle = Objects.requireNonNull(chatClient.prompt(prompt)
+            String intelligentTitle = Objects.requireNonNull(getChatClient().prompt(prompt)
                             .call()
                             .content())
                     .trim();

@@ -6,10 +6,12 @@ import io.minio.BucketExistsArgs;
 import io.minio.MakeBucketArgs;
 import io.minio.MinioClient;
 import io.minio.PutObjectArgs;
+import io.minio.RemoveObjectArgs;
 import lombok.Data;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
@@ -34,6 +36,7 @@ public class ImageService {
 
     private final ImageRepository imageRepository;
     private final MinioClient minioClient;
+    private final OCRService ocrService;
 
     @Value("${minio.bucket-name:images}")
     private String bucketName;
@@ -113,7 +116,10 @@ public class ImageService {
 
             log.info("图片上传成功: {}, 用户ID: {}", fileUrl, userId);
 
-            return ImageUploadResult.success(image);
+            // 同步OCR提取文字
+            OCRService.OCRResult ocrResult = ocrService.extractTextSync(image.getId(), fileUrl);
+
+            return ImageUploadResult.success(image, ocrResult);
 
         } catch (Exception e) {
             log.error("图片上传失败", e);
@@ -187,7 +193,10 @@ public class ImageService {
 
             log.info("Base64图片上传成功: {}, 用户ID: {}", fileUrl, userId);
 
-            return ImageUploadResult.success(image);
+            // 同步OCR提取文字
+            OCRService.OCRResult ocrResult = ocrService.extractTextSync(image.getId(), fileUrl);
+
+            return ImageUploadResult.success(image, ocrResult);
 
         } catch (Exception e) {
             log.error("Base64图片上传失败", e);
@@ -200,6 +209,73 @@ public class ImageService {
      */
     public Image findByUrl(String fileUrl) {
         return imageRepository.findByFileUrl(fileUrl).orElse(null);
+    }
+
+    /**
+     * 删除图片
+     * 1. 删除MongoDB数据
+     * 2. 异步删除MinIO数据
+     */
+    public boolean deleteImage(String imageId) {
+        try {
+            // 1. 从MongoDB查找图片信息
+            Image image = imageRepository.findById(imageId).orElse(null);
+            if (image == null) {
+                log.warn("图片不存在，ID: {}", imageId);
+                return false;
+            }
+
+            String filePath = image.getFilePath();
+
+            // 2. 删除MongoDB数据
+            imageRepository.deleteById(imageId);
+            log.info("已删除MongoDB图片记录，ID: {}, 路径: {}", imageId, filePath);
+
+            // 3. 异步删除MinIO数据
+            deleteMinioObjectAsync(filePath);
+
+            return true;
+        } catch (Exception e) {
+            log.error("删除图片失败，ID: {}", imageId, e);
+            return false;
+        }
+    }
+
+    /**
+     * 根据图片URL删除图片
+     */
+    public boolean deleteImageByUrl(String fileUrl) {
+        try {
+            // 从MongoDB查找图片
+            Image image = imageRepository.findByFileUrl(fileUrl).orElse(null);
+            if (image == null) {
+                log.warn("图片不存在，URL: {}", fileUrl);
+                return false;
+            }
+
+            return deleteImage(image.getId());
+        } catch (Exception e) {
+            log.error("根据URL删除图片失败，URL: {}", fileUrl, e);
+            return false;
+        }
+    }
+
+    /**
+     * 异步删除MinIO对象
+     */
+    @Async
+    public void deleteMinioObjectAsync(String objectName) {
+        try {
+            minioClient.removeObject(
+                    RemoveObjectArgs.builder()
+                            .bucket(bucketName)
+                            .object(objectName)
+                            .build()
+            );
+            log.info("已异步删除MinIO对象: {}", objectName);
+        } catch (Exception e) {
+            log.error("异步删除MinIO对象失败: {}", objectName, e);
+        }
     }
 
     /**
@@ -220,7 +296,6 @@ public class ImageService {
             return ".png";
         }
         return switch (contentType) {
-            case "image/png" -> ".png";
             case "image/jpeg", "image/jpg" -> ".jpg";
             case "image/gif" -> ".gif";
             case "image/webp" -> ".webp";
@@ -237,13 +312,15 @@ public class ImageService {
         private String message;
         private Image image;
         private String fileUrl;
+        private OCRService.OCRResult ocrResult;
 
-        public static ImageUploadResult success(Image image) {
+        public static ImageUploadResult success(Image image, OCRService.OCRResult ocrResult) {
             ImageUploadResult result = new ImageUploadResult();
             result.success = true;
             result.message = "上传成功";
             result.image = image;
             result.fileUrl = image.getFileUrl();
+            result.ocrResult = ocrResult;
             return result;
         }
 

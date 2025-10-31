@@ -48,3 +48,18 @@ logging:
     org.springframework.ai.tool: DEBUG          # 添加这行，查看工具执行
 map:
   api-key: ${AMAP_API_KEY}
+
+# MinIO对象存储配置
+minio:
+  endpoint: http://localhost:9000
+  access-key: minioadmin
+  secret-key: minioadmin123
+  bucket-name: images
+  # MinIO公网访问URL（可选）：如果MinIO部署在公网，配置此项可以让OCR服务使用公网URL
+  # 格式示例：https://minio.example.com
+  # 如果未配置，将尝试使用预签名URL（前提是MinIO endpoint必须是公网可访问的）
+  public-url:
+
+# 图片上传配置
+app:
+  base-url: http://localhost:18080

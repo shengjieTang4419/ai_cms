@@ -27,10 +27,19 @@ public class ChatMessageService {
      * 保存用户消息
      */
     public void saveUserMessage(String sessionId, Long userId, String content) {
+        saveUserMessage(sessionId, userId, content, null);
+    }
+
+    /**
+     * 保存用户消息（支持图片URL列表）
+     * 注意：OCR结果不存储在这里，只存储图片URL
+     * OCR结果只在发送消息时用于LLM输入，不持久化
+     */
+    public void saveUserMessage(String sessionId, Long userId, String content, List<String> imageUrls) {
         try {
-            ChatMessage message = new ChatMessage(sessionId, userId, ChatMessage.MessageType.USER, content);
+            ChatMessage message = new ChatMessage(sessionId, userId, ChatMessage.MessageType.USER, content, imageUrls);
             chatMessageRepository.save(message);
-            log.debug("已保存用户消息到MongoDB: sessionId={}", sessionId);
+            log.debug("已保存用户消息到MongoDB: sessionId={}, imageUrls={}", sessionId, imageUrls != null ? imageUrls.size() : 0);
         } catch (Exception e) {
             log.error("保存用户消息到MongoDB失败: sessionId={}", sessionId, e);
         }

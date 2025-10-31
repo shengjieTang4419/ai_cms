@@ -55,6 +55,13 @@ public class Image {
     @Field("ocr_status")
     private String ocrStatus; // PROCESSING, SUCCESS, FAILED
 
+    @Field("image_parsing_context")
+    private String imageParsingContext;
+
+    @Field("parsing_status")
+    private String parsingStatus; // PROCESSING, SUCCESS, FAILED
+
+
     public Image() {
         this.createdAt = LocalDateTime.now();
         this.ocrStatus = "PROCESSING";

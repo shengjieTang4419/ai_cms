@@ -1,8 +1,9 @@
 package com.cloud.cloud.ai.chat.service;
 
+import com.cloud.cloud.ai.chat.provider.ModelProvider;
+import com.cloud.cloud.ai.chat.provider.ModelProviderManager;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.scheduling.annotation.Async;
@@ -14,16 +15,29 @@ import java.util.stream.Collectors;
 /**
  * @author shengjie.tang
  * @version 1.0.0
- * @description: AI驱动的智能标签提取服务
+ * @description: AI驱动的智能标签提取服务 - 使用SPI获取模型
  * @date 2025/01/16 10:30
  */
 @Service
-@RequiredArgsConstructor
 @Slf4j
 public class AITagExtractionService {
 
-    private final ChatClient chatClient;
+    private final ModelProviderManager providerManager;
     private final ObjectMapper objectMapper;
+
+    public AITagExtractionService(ModelProviderManager providerManager, 
+                                 ObjectMapper objectMapper) {
+        this.providerManager = providerManager;
+        this.objectMapper = objectMapper;
+    }
+
+    /**
+     * 获取默认ChatClient
+     */
+    private ChatClient getChatClient() {
+        ModelProvider defaultProvider = providerManager.getDefaultProvider();
+        return defaultProvider.getChatClient();
+    }
 
     /**
      * AI智能提取聊天标签
@@ -36,7 +50,7 @@ public class AITagExtractionService {
         try {
             String prompt = buildTagExtractionPrompt(content);
             
-            String response = chatClient.prompt(prompt)
+            String response = getChatClient().prompt(prompt)
                     .call()
                     .content();
             

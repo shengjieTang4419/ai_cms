@@ -1,8 +1,12 @@
 package com.cloud.cloud.ai.chat.service;
 
 
+import com.cloud.cloud.ai.chat.domain.Image;
+import com.cloud.cloud.ai.chat.dto.ChatContext;
 import com.cloud.cloud.ai.chat.helper.ChatAnalysisHelper;
 import com.cloud.cloud.ai.chat.mcp.service.tool.PersonalizedRecommendationTools;
+import com.cloud.cloud.ai.chat.provider.ModelProvider;
+import com.cloud.cloud.ai.chat.util.ModelSelector;
 import com.cloud.cloud.common.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -13,6 +17,7 @@ import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
+import org.springframework.util.StringUtils;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
@@ -23,7 +28,7 @@ import java.util.stream.Collectors;
 /**
  * @author shengjie.tang
  * @version 1.0.0
- * @description: AiService
+ * @description: AiService - 支持多模型切换（SPI版本）
  * @date 2025/9/21 15:16
  */
 @Service
@@ -31,35 +36,55 @@ import java.util.stream.Collectors;
 @Slf4j
 public class AIChatService {
 
-    private final ChatClient chatClient;
+    private final ModelSelector modelSelector;
     private final ChatTitleService chatTitleService;
     private final ChatDialogueService chatDialogueService;
     private final ChatMessageService chatMessageService;
     private final PgVectorStore vectorStore;
     private final ChatAnalysisHelper chatAnalysisHelper;
     private final PersonalizedRecommendationTools recommendationTools;
+    private final ImageService imageService;
 
+
+    /**
+     * 根据聊天上下文获取ChatClient实例
+     * 基于完整的请求上下文（包括query、session、images等）智能选择最合适的模型
+     */
+    private ChatClient getChatClient(ChatContext context) {
+        ModelProvider provider = modelSelector.selectModelProvider(context);
+        ChatClient client = provider.getChatClient();
+        log.info("选择模型: {} ({}) - 上下文: images={}, rag={}",
+                provider.getDisplayName(),
+                provider.getModelName(),
+                context.getImageCount(),
+                context.isRagEnhanced());
+        return client;
+    }
 
     public String simpleChat(String query) {
-        return chatClient.prompt(query).call().content();
+        ModelProvider defaultProvider = modelSelector.getProvider("qwen-turbo");
+        return defaultProvider.getChatClient().prompt(query).call().content();
     }
 
-    public Flux<String> streamChat(String query, String sessionId) {
-        return streamChat(query, sessionId, false, query);
+    public Flux<String> streamChat(String query, String sessionId, List<String> imageUrlList) {
+        return streamChat(query, sessionId, false, query, imageUrlList);
     }
 
-    public Flux<String> ragStreamChat(String query, String sessionId) {
+    public Flux<String> ragStreamChat(String query, String sessionId, List<String> imageUrlList) {
         List<Document> relevantDocs = vectorStore.similaritySearch(query);
         if (CollectionUtils.isEmpty(relevantDocs)) {
-            return streamChat(query, sessionId, false, query);
+            return streamChat(query, sessionId, false, query, null);
         }
         String enhancedPrompt = buildRagPrompt(query, relevantDocs);
-        return streamChat(enhancedPrompt, sessionId, true, query);
+        return streamChat(enhancedPrompt, sessionId, true, query, imageUrlList);
     }
 
-    private Flux<String> streamChat(String query, String sessionId, boolean isRagEnhanced, String originQuery) {
+    private Flux<String> streamChat(String query, String sessionId, boolean isRagEnhanced, String originQuery, List<String> imageList) {
         Long userId = SecurityUtils.getCurrentUserId();
 
+        log.info("开始流式对话，userId: {}, sessionId: {}, query: {}, images: {}",
+                userId, sessionId, originQuery, imageList != null ? imageList.size() : 0);
+        
         log.info("异步生成个性化推荐，userId: {}, sessionId: {}, query: {}", userId, sessionId, originQuery);
         CompletableFuture<List<String>> recommendationsFuture = CompletableFuture.supplyAsync(() -> {
             try {
@@ -70,12 +95,26 @@ public class AIChatService {
             }
         });
 
-        Flux<String> contentFlux = chatClient.prompt(query)
+        // 1. 提前处理图片OCR：有图片就解析，没有图片跳过
+        String enhancedQuery = enhanceQueryWithOCR(query, imageList);
+
+        // 2. 构建聊天上下文，用于模型选择
+        ChatContext context = ChatContext.builder().query(enhancedQuery).sessionId(sessionId)
+                .ragEnhanced(isRagEnhanced).originQuery(originQuery).imageUrls(imageList)
+                .userId(userId).build();
+
+        // 3. 根据上下文获取合适的ChatClient并执行对话
+        ChatClient chatClient = getChatClient(context);
+        Flux<String> contentFlux = chatClient.prompt(enhancedQuery)
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, sessionId))
                 .stream().content();
+
+        // 4. 处理会话初始化
         if (chatDialogueService.isNewSession(sessionId)) {
-            chatTitleService.createSessionWithTitle(userId, sessionId, query);
+            chatTitleService.createSessionWithTitle(userId, sessionId, originQuery);
         }
+
+        // 5. 准备响应流
         StringBuilder fullResponse = new StringBuilder();
         StringBuilder recommendations = new StringBuilder();
 
@@ -84,6 +123,7 @@ public class AIChatService {
                 .doOnNext(fullResponse::append)
                 .doOnComplete(() -> {
                     // 尝试获取推荐结果（设置超时时间，避免阻塞）
+
                     try {
                         List<String> recommendationList = recommendationsFuture.get(500, TimeUnit.MILLISECONDS);
                         if (!CollectionUtils.isEmpty(recommendationList)) {
@@ -98,7 +138,7 @@ public class AIChatService {
                     }
 
                     // 保存消息（包含推荐内容）
-                    chatMessageService.saveUserMessage(sessionId, userId, originQuery);
+                    chatMessageService.saveUserMessage(sessionId, userId, originQuery, imageList);
                     String completeResponse = fullResponse + recommendations.toString();
                     chatMessageService.saveAssistantMessage(sessionId, userId, completeResponse, isRagEnhanced);
 
@@ -113,6 +153,32 @@ public class AIChatService {
             }
             return Flux.empty();
         }));
+    }
+
+    /**
+     * 使用OCR结果增强查询
+     * 有图片就解析OCR文字并附加到query，没有图片直接返回原query
+     */
+    private String enhanceQueryWithOCR(String query, List<String> imageList) {
+        // 没有图片，直接返回原始查询
+        if (imageList == null || imageList.isEmpty()) {
+            return query;
+        }
+
+        log.info("检测到{}张图片，提取OCR文字增强查询", imageList.size());
+        StringBuilder enhancedQuery = new StringBuilder(query);
+
+        for (String imageUrl : imageList) {
+            Image image = imageService.findByUrl(imageUrl);
+            if (image != null && StringUtils.hasText(image.getOcrText())) {
+                enhancedQuery.append("\n\n从图片中提取的文字：\n").append(image.getOcrText());
+                log.debug("成功提取图片OCR文字: {}", imageUrl);
+            } else {
+                log.warn("图片OCR未完成或文字为空: {}", imageUrl);
+            }
+        }
+
+        return enhancedQuery.toString();
     }
 
     /**

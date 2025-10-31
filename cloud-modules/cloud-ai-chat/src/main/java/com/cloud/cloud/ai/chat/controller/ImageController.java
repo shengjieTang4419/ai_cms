@@ -57,6 +57,16 @@ public class ImageController {
             response.put("message", result.getMessage());
             response.put("fileUrl", result.getFileUrl());
             response.put("imageId", result.getImage().getId());
+            
+            // 添加OCR结果
+            if (result.getOcrResult() != null) {
+                Map<String, Object> ocrInfo = new HashMap<>();
+                ocrInfo.put("success", result.getOcrResult().isSuccess());
+                ocrInfo.put("text", result.getOcrResult().getText());
+                ocrInfo.put("status", result.getOcrResult().getStatus());
+                response.put("ocr", ocrInfo);
+            }
+            
             return ResponseEntity.ok(response);
         } else {
             response.put("success", false);
@@ -104,6 +114,16 @@ public class ImageController {
             response.put("message", result.getMessage());
             response.put("fileUrl", result.getFileUrl());
             response.put("imageId", result.getImage().getId());
+            
+            // 添加OCR结果
+            if (result.getOcrResult() != null) {
+                Map<String, Object> ocrInfo = new HashMap<>();
+                ocrInfo.put("success", result.getOcrResult().isSuccess());
+                ocrInfo.put("text", result.getOcrResult().getText());
+                ocrInfo.put("status", result.getOcrResult().getStatus());
+                response.put("ocr", ocrInfo);
+            }
+            
             return ResponseEntity.ok(response);
         } else {
             response.put("success", false);
@@ -159,6 +179,65 @@ public class ImageController {
         } catch (Exception e) {
             log.error("获取图片失败", e);
             return ResponseEntity.notFound().build();
+        }
+    }
+
+    /**
+     * 删除图片
+     * 根据图片URL删除图片（删除MongoDB数据，异步删除MinIO数据）
+     */
+    @DeleteMapping("/delete")
+    public ResponseEntity<Map<String, Object>> deleteImage(
+            @RequestParam("fileUrl") String fileUrl) {
+        
+        log.info("收到图片删除请求: {}", fileUrl);
+        
+        Map<String, Object> response = new HashMap<>();
+        try {
+            boolean success = imageService.deleteImageByUrl(fileUrl);
+            if (success) {
+                response.put("success", true);
+                response.put("message", "图片删除成功");
+                return ResponseEntity.ok(response);
+            } else {
+                response.put("success", false);
+                response.put("message", "图片不存在或删除失败");
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+            }
+        } catch (Exception e) {
+            log.error("删除图片失败", e);
+            response.put("success", false);
+            response.put("message", "删除图片失败: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
+        }
+    }
+
+    /**
+     * 根据图片ID删除图片
+     */
+    @DeleteMapping("/{imageId}")
+    public ResponseEntity<Map<String, Object>> deleteImageById(
+            @PathVariable("imageId") String imageId) {
+        
+        log.info("收到图片删除请求，ID: {}", imageId);
+        
+        Map<String, Object> response = new HashMap<>();
+        try {
+            boolean success = imageService.deleteImage(imageId);
+            if (success) {
+                response.put("success", true);
+                response.put("message", "图片删除成功");
+                return ResponseEntity.ok(response);
+            } else {
+                response.put("success", false);
+                response.put("message", "图片不存在或删除失败");
+                return ResponseEntity.status(HttpStatus.NOT_FOUND).body(response);
+            }
+        } catch (Exception e) {
+            log.error("删除图片失败", e);
+            response.put("success", false);
+            response.put("message", "删除图片失败: " + e.getMessage());
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(response);
         }
     }
 

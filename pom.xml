@@ -32,6 +32,8 @@
         <jwt-version>0.13.0</jwt-version>
         <!-- 存在PDF兼容问题 降级版本 -->
         <tika.version>2.9.2</tika.version>
+        <minio.version>8.5.9</minio.version>
+        <dashscope.version>2.21.8</dashscope.version>
 
     </properties>
 
@@ -62,6 +64,17 @@
                 <version>${spring-ai-alibaba.version}</version>
                 <type>pom</type>
                 <scope>import</scope>
+            </dependency>
+            <dependency>
+                <groupId>io.minio</groupId>
+                <artifactId>minio</artifactId>
+                <version>${minio.version}</version>
+            </dependency>
+
+            <dependency>
+                <groupId>com.alibaba</groupId>
+                <artifactId>dashscope-sdk-java</artifactId>
+                <version>${dashscope.version}</version>
             </dependency>
         </dependencies>
     </dependencyManagement>

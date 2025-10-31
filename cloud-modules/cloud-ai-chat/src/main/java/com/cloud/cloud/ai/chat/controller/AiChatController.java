@@ -2,7 +2,6 @@ package com.cloud.cloud.ai.chat.controller;
 
 
 import com.cloud.cloud.ai.chat.service.AIChatService;
-import com.cloud.cloud.ai.chat.service.DocumentService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -10,6 +9,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Flux;
+
+import java.util.List;
 
 
 /**
@@ -33,13 +34,18 @@ public class AiChatController {
     }
 
     @GetMapping("/simple/streamChat")
-    public Flux<String> streamChat(@RequestParam("query") String query, @RequestParam("sessionId") String sessionId) {
-        // 直接调用Service的方法
-        return aiChatService.streamChat(query, sessionId);
+    public Flux<String> streamChat(
+            @RequestParam("query") String query,
+            @RequestParam("sessionId") String sessionId,
+            @RequestParam(value = "imageUrl", required = false) List<String> imageUrlList) {
+        return aiChatService.streamChat(query, sessionId, imageUrlList);
     }
 
     @GetMapping("/rag/streamChat")
-    public Flux<String> streamRAGChat(@RequestParam("query") String query, @RequestParam("sessionId") String sessionId) {
-        return aiChatService.ragStreamChat(query, sessionId);
+    public Flux<String> streamRAGChat(
+            @RequestParam("query") String query,
+            @RequestParam("sessionId") String sessionId,
+            @RequestParam(value = "imageUrl", required = false) List<String> imageUrlList) {
+        return aiChatService.ragStreamChat(query, sessionId, imageUrlList);
     }
 }
