@@ -1,6 +1,7 @@
 package com.cloud.cloud.ai.chat.service;
 
 
+import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
 import com.cloud.cloud.ai.chat.domain.Image;
 import com.cloud.cloud.ai.chat.dto.ChatContext;
 import com.cloud.cloud.ai.chat.helper.ChatAnalysisHelper;
@@ -53,11 +54,12 @@ public class AIChatService {
     private ChatClient getChatClient(ChatContext context) {
         ModelProvider provider = modelSelector.selectModelProvider(context);
         ChatClient client = provider.getChatClient();
-        log.info("选择模型: {} ({}) - 上下文: images={}, rag={}",
+        log.info("选择模型: {} ({}) - 上下文: images={}, rag={}, webSearch={}",
                 provider.getDisplayName(),
                 provider.getModelName(),
                 context.getImageCount(),
-                context.isRagEnhanced());
+                context.isRagEnhanced(),
+                context.isWithEnableSearch());
         return client;
     }
 
@@ -66,24 +68,24 @@ public class AIChatService {
         return defaultProvider.getChatClient().prompt(query).call().content();
     }
 
-    public Flux<String> streamChat(String query, String sessionId, List<String> imageUrlList) {
-        return streamChat(query, sessionId, false, query, imageUrlList);
+    public Flux<String> streamChat(String query, String sessionId, List<String> imageUrlList, Boolean isWithEnableSearch) {
+        return streamChat(query, sessionId, false, Boolean.TRUE.equals(isWithEnableSearch), query, imageUrlList);
     }
 
-    public Flux<String> ragStreamChat(String query, String sessionId, List<String> imageUrlList) {
+    public Flux<String> ragStreamChat(String query, String sessionId, List<String> imageUrlList, Boolean isWithEnableSearch) {
         List<Document> relevantDocs = vectorStore.similaritySearch(query);
         if (CollectionUtils.isEmpty(relevantDocs)) {
-            return streamChat(query, sessionId, false, query, null);
+            return streamChat(query, sessionId, false, Boolean.TRUE.equals(isWithEnableSearch), query, imageUrlList);
         }
         String enhancedPrompt = buildRagPrompt(query, relevantDocs);
-        return streamChat(enhancedPrompt, sessionId, true, query, imageUrlList);
+        return streamChat(enhancedPrompt, sessionId, true, Boolean.TRUE.equals(isWithEnableSearch), query, imageUrlList);
     }
 
-    private Flux<String> streamChat(String query, String sessionId, boolean isRagEnhanced, String originQuery, List<String> imageList) {
+    private Flux<String> streamChat(String query, String sessionId, boolean isRagEnhanced, boolean isWebSearch, String originQuery, List<String> imageList) {
         Long userId = SecurityUtils.getCurrentUserId();
 
-        log.info("开始流式对话，userId: {}, sessionId: {}, query: {}, images: {}",
-                userId, sessionId, originQuery, imageList != null ? imageList.size() : 0);
+        log.info("开始流式对话，userId: {}, sessionId: {}, query: {}, images: {}, rag={}, webSearch={}",
+                userId, sessionId, originQuery, imageList != null ? imageList.size() : 0, isRagEnhanced, isWebSearch);
         
         log.info("异步生成个性化推荐，userId: {}, sessionId: {}, query: {}", userId, sessionId, originQuery);
         CompletableFuture<List<String>> recommendationsFuture = CompletableFuture.supplyAsync(() -> {
@@ -100,14 +102,28 @@ public class AIChatService {
 
         // 2. 构建聊天上下文，用于模型选择
         ChatContext context = ChatContext.builder().query(enhancedQuery).sessionId(sessionId)
-                .ragEnhanced(isRagEnhanced).originQuery(originQuery).imageUrls(imageList)
+                .ragEnhanced(isRagEnhanced).withEnableSearch(isWebSearch).originQuery(originQuery).imageUrls(imageList)
                 .userId(userId).build();
 
         // 3. 根据上下文获取合适的ChatClient并执行对话
+        // ChatClient是线程安全的，每次prompt()调用都会创建新的请求链，互不影响
         ChatClient chatClient = getChatClient(context);
-        Flux<String> contentFlux = chatClient.prompt(enhancedQuery)
-                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, sessionId))
-                .stream().content();
+        
+        // 构建请求链：每次调用prompt()都会创建独立的请求上下文，options只影响本次请求
+        var promptBuilder = chatClient.prompt(enhancedQuery)
+                .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, sessionId));
+        
+        // 当启用全网搜索时，为本次请求设置DashScope的enableSearch选项
+        // 注意：这是请求级别的选项，不会影响其他请求，因此线程安全
+        if (isWebSearch) {
+            DashScopeChatOptions requestOptions = DashScopeChatOptions.builder()
+                    .withEnableSearch(true)
+                    .build();
+            promptBuilder = promptBuilder.options(requestOptions);
+            log.info("为本次请求启用DashScope全网搜索功能，sessionId: {}, userId: {}", sessionId, userId);
+        }
+        
+        Flux<String> contentFlux = promptBuilder.stream().content();
 
         // 4. 处理会话初始化
         if (chatDialogueService.isNewSession(sessionId)) {
@@ -233,6 +249,7 @@ public class AIChatService {
                 请提供准确、有用的回答：
                 """, context, userQuery);
     }
+
 
     /**
      * 异步分析聊天内容并更新用户标签

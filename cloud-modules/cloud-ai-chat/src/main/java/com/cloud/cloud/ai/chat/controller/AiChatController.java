@@ -37,15 +37,17 @@ public class AiChatController {
     public Flux<String> streamChat(
             @RequestParam("query") String query,
             @RequestParam("sessionId") String sessionId,
-            @RequestParam(value = "imageUrl", required = false) List<String> imageUrlList) {
-        return aiChatService.streamChat(query, sessionId, imageUrlList);
+            @RequestParam(value = "imageUrl", required = false) List<String> imageUrlList,
+            @RequestParam(value = "isWithEnableSearch", defaultValue = "false") Boolean isWithEnableSearch) {
+        return aiChatService.streamChat(query, sessionId, imageUrlList, isWithEnableSearch);
     }
 
     @GetMapping("/rag/streamChat")
     public Flux<String> streamRAGChat(
             @RequestParam("query") String query,
             @RequestParam("sessionId") String sessionId,
-            @RequestParam(value = "imageUrl", required = false) List<String> imageUrlList) {
-        return aiChatService.ragStreamChat(query, sessionId, imageUrlList);
+            @RequestParam(value = "imageUrl", required = false) List<String> imageUrlList,
+            @RequestParam(value = "isWithEnableSearch", defaultValue = "false") Boolean isWithEnableSearch) {
+        return aiChatService.ragStreamChat(query, sessionId, imageUrlList, isWithEnableSearch);
     }
 }

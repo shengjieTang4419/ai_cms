@@ -33,6 +33,11 @@ public class ChatContext {
     private boolean ragEnhanced;
 
     /**
+     * 是否启用全网搜索
+     */
+    private boolean withEnableSearch;
+
+    /**
      * 原始查询（用于记录，可能与query不同，比如RAG增强后）
      */
     private String originQuery;
@@ -61,5 +66,6 @@ public class ChatContext {
         return imageUrls == null ? 0 : imageUrls.size();
     }
 }
+
 
 
