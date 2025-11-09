@@ -12,7 +12,7 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update  # 开发环境使用update，生产环境用validate
-    show-sql: true
+    show-sql: false
     properties:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
@@ -43,7 +43,7 @@ spring:
 logging:
   level:
     com.cloud.cloud.ai.chat.mcp.service: DEBUG
-    reactor.netty.http.client: DEBUG
+    reactor.netty.http.client: info
     org.springframework.ai.chat.client: DEBUG  # 添加这行，查看工具调用决策
     org.springframework.ai.tool: DEBUG          # 添加这行，查看工具执行
 map:
@@ -63,3 +63,6 @@ minio:
 # 图片上传配置
 app:
   base-url: http://localhost:18080
+
+ai:
+  guide: false

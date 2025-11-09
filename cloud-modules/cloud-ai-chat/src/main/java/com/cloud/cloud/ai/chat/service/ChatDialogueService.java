@@ -1,6 +1,7 @@
 package com.cloud.cloud.ai.chat.service;
 
 
+import com.cloud.cloud.ai.chat.repository.ChatSessionRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.memory.MessageWindowChatMemory;
@@ -23,15 +24,23 @@ import java.util.List;
 public class ChatDialogueService {
 
     private final MessageWindowChatMemory chatMemory;
+    private final ChatSessionRepository chatSessionRepository;
 
     /**
-     * 是否新会话
+     * 是否新会话（优化版本：通过数据库查询，避免从Redis获取所有历史消息）
      *
-     * @param sessionId
-     * @return
+     * @param sessionId 会话ID
+     * @return true表示新会话，false表示已存在
      */
     public boolean isNewSession(String sessionId) {
-        return CollectionUtils.isEmpty(this.getConversationHistory(sessionId));
+        try {
+            // 通过数据库查询会话是否存在
+            return chatSessionRepository.findBySessionId(sessionId).isEmpty();
+        } catch (Exception e) {
+            log.error("检查会话是否存在失败，sessionId: {}", sessionId, e);
+            // 异常时降级为通过历史消息判断（保持向后兼容）
+            return CollectionUtils.isEmpty(this.getConversationHistory(sessionId));
+        }
     }
 
     /**

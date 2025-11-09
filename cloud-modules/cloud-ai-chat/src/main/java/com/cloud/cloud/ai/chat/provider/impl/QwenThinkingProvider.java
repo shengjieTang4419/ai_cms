@@ -14,17 +14,19 @@ import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.stereotype.Component;
 
 /**
- * 通义千问Turbo模型提供者
+ * 通义千问Thinking模型提供者
+ * <p>
+ * 支持思考推理过程输出的模型，优先级最高，默认使用
  *
  * @author shengjie.tang
  * @version 1.0.0
- * @description: 文本对话模型
- * @date 2025/10/14
+ * @description: Thinking模型，支持推理过程输出
+ * @date 2025/01/16
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class QwenTurboProvider implements ModelProvider {
+public class QwenThinkingProvider implements ModelProvider {
 
     private final ChatClient.Builder chatClientBuilder;
     private final ChatMemoryFactory chatMemoryFactory;
@@ -35,12 +37,12 @@ public class QwenTurboProvider implements ModelProvider {
 
     @Override
     public String getModelName() {
-        return "qwen-turbo";
+        return "qwen3-next-80b-a3b-thinking";
     }
 
     @Override
     public String getDisplayName() {
-        return "通义千问Turbo";
+        return "通义千问Thinking（推理版）";
     }
 
     @Override
@@ -50,6 +52,11 @@ public class QwenTurboProvider implements ModelProvider {
 
     @Override
     public boolean supportsStream() {
+        return true;
+    }
+
+    @Override
+    public boolean supportsThinking() {
         return true;
     }
 
@@ -64,24 +71,36 @@ public class QwenTurboProvider implements ModelProvider {
 
                     var builder = chatClientBuilder
                             .defaultSystem(systemPrompt)
-                            .defaultAdvisors(
-                                    new SimpleLoggerAdvisor(),
-                                    MessageChatMemoryAdvisor.builder(memory).build())
-                            .defaultOptions(DashScopeChatOptions.builder()
-                                    .withModel(this.getModelName())
-                                    .withTopP(0.7)
-                                    .build());
+                            .defaultAdvisors(new SimpleLoggerAdvisor(), MessageChatMemoryAdvisor.builder(memory).build());
+                    
+                    // 构建DashScope选项，尝试设置enable_thinking参数
+                    var optionsBuilder = DashScopeChatOptions.builder()
+                            .withModel(this.getModelName())
+                            .withTopP(0.7);
+                    
+                    // 尝试通过反射设置enable_thinking参数（Thinking模型必需）
+                    try {
+                        java.lang.reflect.Method method = optionsBuilder.getClass().getMethod("withEnableThinking", Boolean.class);
+                        method.invoke(optionsBuilder, true);
+                        log.info("✅ 在Provider级别成功启用enable_thinking参数");
+                    } catch (NoSuchMethodException e) {
+                        log.warn("⚠️ DashScopeChatOptions不支持withEnableThinking方法，将在请求级别尝试设置");
+                    } catch (Exception e) {
+                        log.warn("⚠️ 设置enable_thinking参数失败: {}", e.getMessage());
+                    }
+                    
+                    builder.defaultOptions(optionsBuilder.build());
 
                     // 注册MCP工具
                     if (toolCallbackProvider != null && toolCallbackProvider.getToolCallbacks().length > 0) {
                         builder.defaultToolCallbacks(toolCallbackProvider.getToolCallbacks());
-                        log.info("✅ 已注册 {} 个工具回调", toolCallbackProvider.getToolCallbacks().length);
+                        log.info("✅ 已注册 {} 个工具回调到Thinking模型", toolCallbackProvider.getToolCallbacks().length);
                     } else {
                         log.warn("⚠️ 未找到工具回调提供者或工具列表为空");
                     }
 
                     chatClientInstance = builder.build();
-                    log.info("✅ QwenTurboProvider初始化完成，系统提示词长度: {} 字符", systemPrompt.length());
+                    log.info("✅ QwenThinkingProvider初始化完成，系统提示词长度: {} 字符", systemPrompt.length());
                 }
             }
         }
@@ -90,7 +109,7 @@ public class QwenTurboProvider implements ModelProvider {
 
     @Override
     public int getPriority() {
-        return 10; // 默认优先级
+        return 1; // 最高优先级，确保默认使用
     }
 }
 

@@ -35,6 +35,13 @@ public interface ModelProvider {
     boolean supportsStream();
 
     /**
+     * 是否支持Thinking模型（深度思考）
+     */
+    default boolean supportsThinking() {
+        return false;
+    }
+
+    /**
      * 获取ChatClient实例
      */
     ChatClient getChatClient();

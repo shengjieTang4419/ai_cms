@@ -38,8 +38,11 @@ public class AiChatController {
             @RequestParam("query") String query,
             @RequestParam("sessionId") String sessionId,
             @RequestParam(value = "imageUrl", required = false) List<String> imageUrlList,
-            @RequestParam(value = "isWithEnableSearch", defaultValue = "false") Boolean isWithEnableSearch) {
-        return aiChatService.streamChat(query, sessionId, imageUrlList, isWithEnableSearch);
+            @RequestParam(value = "isWithEnableSearch", defaultValue = "false") Boolean isWithEnableSearch,
+            @RequestParam(value = "isDeepThinking", defaultValue = "false") Boolean isDeepThinking,
+            @RequestParam(value = "longitude", required = false) String longitude,
+            @RequestParam(value = "latitude", required = false) String latitude) {
+        return aiChatService.streamChat(query, sessionId, imageUrlList, isWithEnableSearch, isDeepThinking, longitude, latitude);
     }
 
     @GetMapping("/rag/streamChat")
@@ -47,7 +50,10 @@ public class AiChatController {
             @RequestParam("query") String query,
             @RequestParam("sessionId") String sessionId,
             @RequestParam(value = "imageUrl", required = false) List<String> imageUrlList,
-            @RequestParam(value = "isWithEnableSearch", defaultValue = "false") Boolean isWithEnableSearch) {
-        return aiChatService.ragStreamChat(query, sessionId, imageUrlList, isWithEnableSearch);
+            @RequestParam(value = "isWithEnableSearch", defaultValue = "false") Boolean isWithEnableSearch,
+            @RequestParam(value = "isDeepThinking", defaultValue = "false") Boolean isDeepThinking,
+            @RequestParam(value = "longitude", required = false) String longitude,
+            @RequestParam(value = "latitude", required = false) String latitude) {
+        return aiChatService.ragStreamChat(query, sessionId, imageUrlList, isWithEnableSearch, isDeepThinking, longitude, latitude);
     }
 }

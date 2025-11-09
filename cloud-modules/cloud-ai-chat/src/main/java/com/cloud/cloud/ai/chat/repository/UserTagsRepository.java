@@ -19,9 +19,9 @@ import java.util.Optional;
 public interface UserTagsRepository extends JpaRepository<UserTags, Long> {
 
     /**
-     * 根据用户ID查找用户标签，按总权重倒序
+     * 根据用户ID查找用户标签，按总权重倒序，返回前5个
      */
-    List<UserTags> findByUserIdOrderByTotalWeightDesc(Long userId);
+    List<UserTags> findTop5ByUserIdOrderByTotalWeightDesc(Long userId);
 
     /**
      * 根据用户ID和标签名查找

@@ -71,7 +71,7 @@ public class PersonalizedRecommendationTools {
 
         try {
             // 获取用户标签（按总权重排序）
-            List<UserTags> topTags = userTagsRepository.findByUserIdOrderByTotalWeightDesc(userId).stream().limit(limit).toList();
+            List<UserTags> topTags = userTagsRepository.findTop5ByUserIdOrderByTotalWeightDesc(userId).stream().limit(limit).toList();
 
             if (topTags.isEmpty()) {
                 return "该用户还没有足够的标签数据，无法生成个性化推荐。建议用户先完善个人资料或进行一些聊天互动。";
@@ -135,7 +135,7 @@ public class PersonalizedRecommendationTools {
 
         try {
             // 获取用户标签
-            List<UserTags> userTags = userTagsRepository.findByUserIdOrderByTotalWeightDesc(userId);
+            List<UserTags> userTags = userTagsRepository.findTop5ByUserIdOrderByTotalWeightDesc(userId);
 
             if (userTags.isEmpty()) {
                 return "该用户还没有足够的标签数据，无法找到相似用户。";
@@ -155,7 +155,7 @@ public class PersonalizedRecommendationTools {
                 Long similarUserId = similarUserIds.get(i);
 
                 // 获取相似用户的标签
-                List<UserTags> similarUserTags = userTagsRepository.findByUserIdOrderByTotalWeightDesc(similarUserId);
+                List<UserTags> similarUserTags = userTagsRepository.findTop5ByUserIdOrderByTotalWeightDesc(similarUserId);
 
                 // 计算共同标签
                 List<String> commonTags = userTags.stream()
@@ -190,7 +190,7 @@ public class PersonalizedRecommendationTools {
 
         try {
             // 获取用户热门标签
-            List<UserTags> userTags = userTagsRepository.findByUserIdOrderByTotalWeightDesc(userId);
+            List<UserTags> userTags = userTagsRepository.findTop5ByUserIdOrderByTotalWeightDesc(userId);
 
             if (userTags.isEmpty()) {
                 return new ArrayList<>();
@@ -223,8 +223,8 @@ public class PersonalizedRecommendationTools {
         log.info("AI 调用工具：分析用户兴趣，userId={}", userId);
 
         try {
-            // 获取用户所有标签
-            List<UserTags> allTags = userTagsRepository.findByUserIdOrderByTotalWeightDesc(userId);
+            // 获取用户所有标签（前5个）
+            List<UserTags> allTags = userTagsRepository.findTop5ByUserIdOrderByTotalWeightDesc(userId);
 
             if (allTags.isEmpty()) {
                 return "该用户还没有任何标签数据。";

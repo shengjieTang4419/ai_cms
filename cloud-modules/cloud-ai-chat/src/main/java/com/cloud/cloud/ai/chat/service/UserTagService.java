@@ -125,7 +125,7 @@ public class UserTagService {
         log.info("基于聊天内容更新标签，userId: {}, chatTags: {}", userId, chatTags);
 
 
-        List<UserTags> userTags = userTagsRepository.findByUserIdOrderByTotalWeightDesc(userId);
+        List<UserTags> userTags = userTagsRepository.findTop5ByUserIdOrderByTotalWeightDesc(userId);
         Map<String, UserTags> tagMap = userTags.stream().collect(Collectors.toMap(UserTags::getTagName, Function.identity()));
 
         List<UserTags> tagsToSave = new ArrayList<>();
@@ -195,10 +195,10 @@ public class UserTagService {
 
 
     /**
-     * 获取用户的所有标签
+     * 获取用户的所有标签（前5个）
      */
     public List<UserTags> getUserTags(Long userId) {
-        return userTagsRepository.findByUserIdOrderByTotalWeightDesc(userId);
+        return userTagsRepository.findTop5ByUserIdOrderByTotalWeightDesc(userId);
     }
 
     /**
@@ -206,7 +206,7 @@ public class UserTagService {
      */
     public List<UserTags> getHotTags(Long userId, int limit) {
         ValidationUtils.validateRecommendationLimit(limit);
-        return userTagsRepository.findByUserIdOrderByTotalWeightDesc(userId)
+        return userTagsRepository.findTop5ByUserIdOrderByTotalWeightDesc(userId)
                 .stream()
                 .limit(limit)
                 .toList();
