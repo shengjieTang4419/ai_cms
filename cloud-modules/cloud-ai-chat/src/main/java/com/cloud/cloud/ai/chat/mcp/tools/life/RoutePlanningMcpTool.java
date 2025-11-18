@@ -1,76 +1,115 @@
-package com.cloud.cloud.ai.chat.mcp.service.tool;
+package com.cloud.cloud.ai.chat.mcp.tools.life;
 
 import com.cloud.cloud.ai.chat.domain.RouteResponse;
 import com.cloud.cloud.ai.chat.enums.RouteType;
+import com.cloud.cloud.ai.chat.mcp.api.McpTool;
+import com.cloud.cloud.ai.chat.mcp.api.Schema;
 import com.cloud.cloud.ai.chat.mcp.service.LocationService;
 import com.cloud.cloud.ai.chat.mcp.service.RoutePlanningService;
+import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.ai.tool.annotation.Tool;
-import org.springframework.ai.tool.annotation.ToolParam;
 import org.springframework.stereotype.Component;
 
 import java.time.Duration;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
+ * 路线规划工具 - 基于MCP架构的实现
+ *
  * @author shengjie.tang
  * @version 1.0.0
- * @description: 路线规划工具 - 提供驾车、步行、骑行路线规划功能
- * @date 2025/01/17
+ * @date 2025/11/16
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class RoutePlanningTools {
+public class RoutePlanningMcpTool implements McpTool {
 
     private final RoutePlanningService routePlanningService;
     private final LocationService locationService;
 
-    /**
-     * 路线规划（统一方法）
-     * 支持驾车、步行、骑行三种路线规划方式
-     * 出发地和目的地都可以是地址或坐标（经纬度，格式：经度,纬度）
-     * 系统会自动进行地理编码获取坐标
-     *
-     * @param routeType   路线类型：driving（驾车）、walking（步行）、bicycling（骑行）
-     * @param origin      出发地，可以是地址（如"北京市天安门"）或坐标（如"116.434307,39.90909"）
-     * @param destination 目的地，可以是地址（如"北京市故宫"）或坐标（如"116.434446,39.90816"）
-     * @return 路线规划结果描述
-     */
-    @Tool(name = "plan_route", description = "规划路线。支持三种路线类型：driving（驾车）、walking（步行）、bicycling（骑行）。出发地和目的地都可以是地址（如\"北京市天安门\"）或坐标（格式：经度,纬度，如\"116.434307,39.90909\"）。系统会自动将地址转换为坐标后再规划路线。返回路线距离、耗时等信息。驾车路线还会返回费用信息。")
-    public String planRoute(
-            @ToolParam(description = "路线类型：driving（驾车）、walking（步行）、bicycling（骑行）") String routeType,
-            @ToolParam(description = "出发地，可以是地址（如\"北京市天安门\"）或坐标（格式：经度,纬度，如\"116.434307,39.90909\"）") String origin,
-            @ToolParam(description = "目的地，可以是地址（如\"北京市故宫\"）或坐标（格式：经度,纬度，如\"116.434446,39.90816\"）") String destination) {
+    @Override
+    public String getName() {
+        return "plan_route";
+    }
 
-        // 解析路线类型
-        RouteType type;
-        try {
-            type = RouteType.valueOf(routeType.toUpperCase());
-        } catch (IllegalArgumentException e) {
-            log.warn("无效的路线类型：{}，使用默认类型：驾车", routeType);
-            return String.format("无效的路线类型：%s。支持的路线类型：driving（驾车）、walking（步行）、bicycling（骑行）", routeType);
+    @Override
+    public String getDescription() {
+        return "规划路线。支持三种路线类型：drive（驾车）、walk（步行）、ride（骑行）。" +
+                "出发地和目的地都可以是地址（如\"北京市天安门\"）或坐标（格式：经度,纬度，如\"116.434307,39.90909\"）。" +
+                "系统会自动将地址转换为坐标后再规划路线。返回路线距离、耗时等信息。驾车路线还会返回费用信息。";
+    }
+
+    @Override
+    public Schema getInputSchema() {
+        Map<String, Schema> properties = new HashMap<>();
+
+        properties.put("from", Schema.string("出发地，可以是地址（如\"北京市天安门\"）或坐标（格式：经度,纬度，如\"116.434307,39.90909\"）"));
+        properties.put("to", Schema.string("目的地，可以是地址（如\"北京市故宫\"）或坐标（格式：经度,纬度，如\"116.434446,39.90816\"）"));
+        properties.put("mode", Schema.stringEnum(
+                "路线类型：drive（驾车）、walk（步行）、ride（骑行）",
+                Arrays.asList("drive", "walk", "ride")
+        ));
+
+        // from和to是必填的，mode可选（默认drive）
+        return Schema.object(properties, Arrays.asList("from", "to"));
+    }
+
+    @Override
+    public Schema getOutputSchema() {
+        return Schema.string("格式化后的路线规划结果，包含距离、耗时、费用、路线指引等信息");
+    }
+
+    @Override
+    public boolean match(String query) {
+        if (query == null) {
+            return false;
         }
+        String lowerQuery = query.toLowerCase();
+        return lowerQuery.contains("路线") ||
+                lowerQuery.contains("导航") ||
+                lowerQuery.contains("怎么去") ||
+                lowerQuery.contains("如何到") ||
+                lowerQuery.contains("route") ||
+                lowerQuery.contains("怎么走");
+    }
 
-        log.info("开始规划{}路线，出发地：{}，目的地：{}", type.getDisplayName(), origin, destination);
+    @Override
+    public Object execute(JsonNode input) throws Exception {
+        // 解析参数
+        String from = input.get("from").asText();
+        String to = input.get("to").asText();
+        String mode = input.has("mode") ? input.get("mode").asText() : "drive";
+
+        // 将mode转换为RouteType
+        RouteType routeType = switch (mode.toLowerCase()) {
+            case "walk" -> RouteType.WALKING;
+            case "ride" -> RouteType.BICYCLING;
+            default -> RouteType.DRIVING;
+        };
+
+        log.info("开始规划{}路线，出发地：{}，目的地：{}", routeType.getDisplayName(), from, to);
 
         try {
             // 获取出发地坐标（支持地址或坐标格式）
-            String originCoord = locationService.getCoordinate(origin);
+            String originCoord = locationService.getCoordinate(from);
             if (originCoord == null) {
                 return "无法获取出发地坐标，请检查地址是否正确（例如：北京市天安门）或坐标格式是否正确（格式：经度,纬度）";
             }
 
             // 获取目的地坐标（支持地址或坐标格式）
-            String destinationCoord = locationService.getCoordinate(destination);
+            String destinationCoord = locationService.getCoordinate(to);
             if (destinationCoord == null) {
                 return "无法获取目的地坐标，请检查地址是否正确（例如：北京市故宫）或坐标格式是否正确（格式：经度,纬度）";
             }
 
             // 调用路线规划服务
-            RouteResponse response = routePlanningService.planRoute(type, originCoord, destinationCoord)
+            RouteResponse response = routePlanningService.planRoute(routeType, originCoord, destinationCoord)
                     .timeout(Duration.ofSeconds(15))
-                    .doOnSubscribe(s -> log.debug("订阅{}路线规划服务", type.getDisplayName()))
+                    .doOnSubscribe(s -> log.debug("订阅{}路线规划服务", routeType.getDisplayName()))
                     .block();
 
             if (response == null) {
@@ -89,23 +128,26 @@ public class RoutePlanningTools {
             }
 
             // 格式化返回结果
-            return formatRouteResult(response, type.getDisplayName(), origin, destination);
+            return formatRouteResult(response, routeType.getDisplayName(), from, to);
 
         } catch (Exception e) {
-            log.error("{}路线规划异常：{}", type.getDisplayName(), e.getMessage(), e);
+            log.error("{}路线规划异常：{}", routeType.getDisplayName(), e.getMessage(), e);
             return "路线规划服务暂时不可用，请稍后重试";
         }
     }
 
+    @Override
+    public String getCategory() {
+        return "life";
+    }
+
+    @Override
+    public String getVersion() {
+        return "2.0.0";
+    }
 
     /**
      * 格式化路线规划结果
-     *
-     * @param response    路线规划响应
-     * @param routeType   路线类型（驾车/步行/骑行）
-     * @param origin      原始出发地
-     * @param destination 原始目的地
-     * @return 格式化后的结果字符串
      */
     private String formatRouteResult(RouteResponse response, String routeType, String origin, String destination) {
         StringBuilder result = new StringBuilder();
@@ -117,7 +159,7 @@ public class RoutePlanningTools {
         if (route.getPaths() != null && !route.getPaths().isEmpty()) {
             RouteResponse.Route.Path firstPath = route.getPaths().get(0);
 
-            // 距离（米转公里）- 兼容null值
+            // 距离（米转公里）
             if (firstPath.getDistance() != null && !firstPath.getDistance().isEmpty()) {
                 try {
                     double distanceKm = Double.parseDouble(firstPath.getDistance()) / 1000.0;
@@ -128,7 +170,7 @@ public class RoutePlanningTools {
                 }
             }
 
-            // 耗时（秒转分钟）- 兼容null值
+            // 耗时（秒转分钟）
             if (firstPath.getDuration() != null && !firstPath.getDuration().isEmpty()) {
                 try {
                     int durationSeconds = Integer.parseInt(firstPath.getDuration());
@@ -164,13 +206,11 @@ public class RoutePlanningTools {
                     RouteResponse.Route.Path.Step step = firstPath.getSteps().get(i);
                     if (step.getInstruction() != null) {
                         String stepInfo = String.format("%d. %s", i + 1, step.getInstruction());
-                        // 如果步骤有距离信息，则添加距离
                         if (step.getDistance() != null && !step.getDistance().isEmpty()) {
                             try {
                                 double stepDistanceKm = Double.parseDouble(step.getDistance()) / 1000.0;
                                 stepInfo += String.format("（%.2f公里）", stepDistanceKm);
                             } catch (NumberFormatException e) {
-                                // 如果解析失败，直接显示米数
                                 stepInfo += String.format("（%s米）", step.getDistance());
                             }
                         }
@@ -186,4 +226,3 @@ public class RoutePlanningTools {
         return result.toString();
     }
 }
-

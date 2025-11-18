@@ -5,7 +5,7 @@ import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
 import com.cloud.cloud.ai.chat.domain.Image;
 import com.cloud.cloud.ai.chat.dto.ChatContext;
 import com.cloud.cloud.ai.chat.helper.ChatAnalysisHelper;
-import com.cloud.cloud.ai.chat.mcp.service.tool.PersonalizedRecommendationTools;
+import com.cloud.cloud.ai.chat.mcp.tools.office.PersonalizedRecommendationMcpTool;
 import com.cloud.cloud.ai.chat.provider.ModelProvider;
 import com.cloud.cloud.ai.chat.util.ModelSelector;
 import com.cloud.cloud.common.security.SecurityUtils;
@@ -44,7 +44,7 @@ public class AIChatService {
     private final ChatMessageService chatMessageService;
     private final PgVectorStore vectorStore;
     private final ChatAnalysisHelper chatAnalysisHelper;
-    private final PersonalizedRecommendationTools recommendationTools;
+    private final PersonalizedRecommendationMcpTool recommendationTool;
     private final ImageService imageService;
 
     @Value("${ai.guide:true}")
@@ -157,7 +157,7 @@ public class AIChatService {
         log.debug("异步生成个性化推荐，userId: {}, sessionId: {}, query: {}", userId, sessionId, originQuery);
         return CompletableFuture.supplyAsync(() -> {
             try {
-                return recommendationTools.suggestFollowUpTopics(originQuery, userId);
+                return recommendationTool.suggestFollowUpTopics(originQuery, userId);
             } catch (Exception e) {
                 log.error("生成个性化推荐失败，userId: {}, sessionId: {}", userId, sessionId, e);
                 return null;

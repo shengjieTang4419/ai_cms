@@ -64,8 +64,7 @@ public class QwenTurboProvider implements ModelProvider {
 
                     var builder = chatClientBuilder
                             .defaultSystem(systemPrompt)
-                            .defaultAdvisors(
-                                    new SimpleLoggerAdvisor(),
+                            .defaultAdvisors(new SimpleLoggerAdvisor(),
                                     MessageChatMemoryAdvisor.builder(memory).build())
                             .defaultOptions(DashScopeChatOptions.builder()
                                     .withModel(this.getModelName())

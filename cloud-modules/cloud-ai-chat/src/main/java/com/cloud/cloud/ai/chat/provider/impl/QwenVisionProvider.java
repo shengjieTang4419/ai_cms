@@ -62,8 +62,7 @@ public class QwenVisionProvider implements ModelProvider {
 
                     chatClientInstance = chatClientBuilder
                             .defaultSystem(systemPrompt)
-                            .defaultAdvisors(
-                                    new SimpleLoggerAdvisor(),
+                            .defaultAdvisors(new SimpleLoggerAdvisor(),
                                     MessageChatMemoryAdvisor.builder(memory).build())
                             .defaultOptions(DashScopeChatOptions.builder()
                                     .withModel(this.getModelName())

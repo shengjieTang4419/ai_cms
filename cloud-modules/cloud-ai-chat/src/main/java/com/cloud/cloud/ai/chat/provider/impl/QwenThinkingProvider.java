@@ -72,23 +72,12 @@ public class QwenThinkingProvider implements ModelProvider {
                     var builder = chatClientBuilder
                             .defaultSystem(systemPrompt)
                             .defaultAdvisors(new SimpleLoggerAdvisor(), MessageChatMemoryAdvisor.builder(memory).build());
-                    
+
                     // 构建DashScope选项，尝试设置enable_thinking参数
                     var optionsBuilder = DashScopeChatOptions.builder()
                             .withModel(this.getModelName())
                             .withTopP(0.7);
-                    
-                    // 尝试通过反射设置enable_thinking参数（Thinking模型必需）
-                    try {
-                        java.lang.reflect.Method method = optionsBuilder.getClass().getMethod("withEnableThinking", Boolean.class);
-                        method.invoke(optionsBuilder, true);
-                        log.info("✅ 在Provider级别成功启用enable_thinking参数");
-                    } catch (NoSuchMethodException e) {
-                        log.warn("⚠️ DashScopeChatOptions不支持withEnableThinking方法，将在请求级别尝试设置");
-                    } catch (Exception e) {
-                        log.warn("⚠️ 设置enable_thinking参数失败: {}", e.getMessage());
-                    }
-                    
+
                     builder.defaultOptions(optionsBuilder.build());
 
                     // 注册MCP工具

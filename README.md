@@ -14,6 +14,14 @@
 - 实现多模型自动切换（SPI机制）
 - 打造生产级 AI 对话系统
 
+### ✨ 最新能力速览（2025 Q4）
+
+- 🖼️ **OCR 图片识别**：上传即调度 DashScope OCR，自动把识别文本回填到对话上下文，支撑图文混合问答。
+- 🌐 **联网搜索**：一键开启 DashScope enableSearch，实时检索外部信息并引用来源。
+- ☁️ **MinIO 对象存储**：统一管理原图、预览和 OCR 元数据，支持回溯与二次分析。
+- 🧭 **路线规划 MCP**：新增 `plan_route` 工具，自动完成地址地理编码并输出驾车/步行/骑行方案。
+- 📍 **地理位置体验优化**：前端智能识别“路线/位置”意图并拉取浏览器经纬度，后端自动将坐标注入 Prompt。
+
 ---
 
 ## 🏗️ 技术架构
@@ -107,98 +115,89 @@ ModelProvider provider = modelSelector.selectModelProvider(context);
 
 ---
 
-### 2. 图片处理 - MinIO + OCR 🖼️
+### 2. 图片处理 2.0 - MinIO + OCR + 多模态回流 🖼️
 
 #### 2.1 完整流程
 
 ```
-图片上传 → MinIO存储 → DashScope OCR → 文字提取 → MongoDB元数据 → 增强对话
+图片上传 → MinIO存储（原图+预览） → DashScope OCR → 文字/结构化JSON → MongoDB元数据 → ChatContext 增强
 ```
 
-#### 2.2 核心功能
+#### 2.2 核心能力
 
-**支持的上传方式**：
-- 📤 单张/批量上传（MultipartFile）
-- 📤 Base64 上传
-- 📤 自动生成访问URL
-
-**OCR 文字识别**：
-- 自动识别图片中的文字
-- 异步处理，不阻塞上传
-- OCR 结果存储到 MongoDB
-
-**智能对话增强**：
-```java
-// 自动将OCR文字附加到用户提问
-String enhancedQuery = query + "\n\n从图片中提取的文字：\n" + ocrText;
-```
+- 📤 **多种上传形态**：表单文件、Base64、批量粘贴全部打通。
+- ☁️ **MinIO 分层存储**：按日期生成层级路径，前端直接访问公网地址。
+- 🔁 **OCR 异步回流**：上传即时返回 URL，OCR 结果由异步任务回填 Mongo，避免阻塞体验。
+- 🧠 **Prompt 自动增强**：在 `AIChatService.enhanceQueryWithOCR` 中将 OCR 文本拼接到用户提问，实现“看图说话”。
+- 🧩 **多模态模型切换**：存在图片即自动路由到 `qwen-vl-plus` 等 Vision 模型。
 
 #### 2.3 技术实现
 
-**MinIO 配置**：
 ```yaml
 minio:
   endpoint: http://localhost:9000
-  access-key: minioadmin
-  secret-key: minioadmin
   bucket-name: images
 ```
 
-**图片元数据**：
 ```java
 @Document(collection = "images")
 public class Image {
-    private String id;              // MongoDB ID
-    private String fileUrl;         // MinIO访问URL
-    private String ocrText;         // OCR识别文字
-    private String ocrStatus;       // OCR状态
-    private Long userId;            // 上传用户
+    private String fileUrl;     // MinIO 访问地址
+    private String ocrText;     // OCR 内容（含结构化JSON）
+    private OcrStatus ocrStatus;// PENDING / SUCCESS / FAILED
+    private String userId;
 }
 ```
 
 ---
 
-### 3. 联网功能 - 实时信息获取 🌐
+### 3. 联网 & MCP 工具生态 🌐
 
-#### 3.1 DashScope 全网搜索
+| 功能 | 技术 | 亮点 |
+|------|------|------|
+| DashScope 全网搜索 | `DashScopeChatOptions.withEnableSearch(true)` | 按需开启，实时引用外部信息 |
+| Weather 工具 | MCP + 高德天气 | 自动城市匹配 + Function calling |
+| Location 工具 | MCP + 浏览器定位 | 前端自动捕获经纬度、后端写入 Prompt |
+| Route Planning 工具 | MCP + 高德路径规划 2.0 | 支持驾车/步行/骑行，自动地理编码 |
 
-**启用方式**：
-```java
-DashScopeChatOptions requestOptions = DashScopeChatOptions.builder()
-    .withEnableSearch(true)  // 开启全网搜索
-    .build();
+#### 3.1 Route Planning MCP 🧭
 
-Flux<String> result = chatClient.prompt(query)
-    .options(requestOptions)
-    .stream().content();
+```mermaid
+flowchart LR
+UserQuery -- plan_route --> MCPTools --> RoutePlanningService --> AMapAPI --> Result
 ```
 
-**特点**：
-- ✅ 实时获取最新信息
-- ✅ 自动引用来源
-- ✅ 请求级别控制（不影响其他请求）
+- `RoutePlanningTools#planRoute` 自动解析路线类型、完成地址→坐标转换。
+- `LocationService` 识别经纬度字符串 vs. 普通地址，必要时调用高德地理编码。
+- 支持驾车/步行/骑行三种策略，返回距离、耗时、限行、红绿灯等信息。
+- 前端若检测到“怎么去/路线”等关键词，会请求浏览器定位并将经纬度透传到 `streamChat`，Prompt 会附带 `[我的当前位置坐标：lng,lat]`，模型可直接调用 MCP 工具生成路线方案。
 
-#### 3.2 天气查询工具（Function Calling）
+#### 3.2 联网搜索工作流
 
-**集成高德地图天气 API**：
 ```java
-@Tool(name = "get_weather", description = "获取指定城市的实时天气信息")
-public String getWeather(@ToolParam String cityName) {
-    // 1. 智能匹配城市编码
-    CityInfo cityInfo = cityInfoService.getCityInfoByName(cityName);
-    
-    // 2. 调用天气API
-    WeatherResponse weather = weatherService.getWeather(cityInfo.getCode());
-    
-    // 3. 返回格式化结果
-    return String.format("%s天气：%s，温度：%s℃", ...);
-}
+DashScopeChatOptions options = DashScopeChatOptions.builder()
+        .withEnableSearch(isWithEnableSearch)
+        .build();
+chatClient.prompt(query).options(options).stream();
 ```
 
-**智能城市匹配**：
-- 支持多种输入：上海、上海市、浦东新区、上海市浦东新区
-- 数据库预存全国城市编码
-- 模糊匹配 + 优先级排序
+- 仅当用户开启“全网搜索”开关才触发，节省外部调用额度。
+- 搜索结果会由 DashScope 自动拼接引用，前端可以原样展示。
+
+---
+
+### 4. 地理位置体验优化 📍
+
+#### 4.1 前端能力
+
+- 监听“路线/导航/怎么去”等关键词自动触发定位。
+- 若只提到目的地，会把定位坐标放在 `locationParam` 里，避免打扰用户。
+- 定位失败会给出浏览器权限指引。
+
+#### 4.2 后端处理
+
+- `AIChatService.buildChatContext` 将经纬度转成 `[我的当前位置坐标：lng,lat]` 注入 Prompt，方便 MCP 工具消费。
+- Route Planning 工具优先使用显式坐标；若缺失则再次调用地理编码补全。
 
 ---
 
