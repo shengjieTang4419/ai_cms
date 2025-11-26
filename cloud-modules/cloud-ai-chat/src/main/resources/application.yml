@@ -46,8 +46,14 @@ logging:
     reactor.netty.http.client: info
     org.springframework.ai.chat.client: DEBUG  # 添加这行，查看工具调用决策
     org.springframework.ai.tool: DEBUG          # 添加这行，查看工具执行
+# 高德地图配置
 map:
-  api-key: ${AMAP_API_KEY}
+  # Web服务 Key（后端 HTTP API 调用）：路线规划、逆地理编码、天气查询等
+  web-service-key: ${AMAP_API_KEY}
+  # Web端 JS API Key（前端浏览器 SDK）：浏览器定位、地图展示等
+  js-api-key: ${AMAP_JS_API_KEY}
+  # 安全密钥（可选，用于 JS API 的域名白名单校验）
+  security-js-code: ${AMAP_SECURITY_CODE:}
 
 # MinIO对象存储配置
 minio:

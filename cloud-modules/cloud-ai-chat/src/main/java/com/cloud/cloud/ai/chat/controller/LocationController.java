@@ -2,8 +2,10 @@ package com.cloud.cloud.ai.chat.controller;
 
 import com.cloud.cloud.ai.chat.domain.RegeoResponse;
 import com.cloud.cloud.ai.chat.mcp.service.LocationService;
+import com.cloud.cloud.ai.chat.service.LocationAiService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
@@ -24,6 +26,19 @@ import java.util.Map;
 public class LocationController {
 
     private final LocationService locationService;
+    private final LocationAiService locationAiService;
+
+    // Web服务 Key（后端 HTTP API 调用）
+    @Value("${map.web-service-key}")
+    private String amapWebServiceKey;
+
+    // JS API Key（前端浏览器 SDK）
+    @Value("${map.js-api-key}")
+    private String amapJsApiKey;
+
+    // 安全密钥（可选）
+    @Value("${map.security-js-code}")
+    private String securityJsCode;
 
     /**
      * 根据经纬度获取详细地址信息
@@ -37,7 +52,7 @@ public class LocationController {
     public ResponseEntity<Map<String, Object>> getLocationByCoordinates(
             @RequestParam("longitude") String longitude,
             @RequestParam("latitude") String latitude) {
-        
+
         log.info("接收前端定位请求，经度：{}，纬度：{}", longitude, latitude);
 
         Map<String, Object> response = new HashMap<>();
@@ -65,7 +80,7 @@ public class LocationController {
             if (regeocode.getAddressComponent() != null) {
                 RegeoResponse.AddressComponent addr = regeocode.getAddressComponent();
                 Map<String, String> addressComponent = new HashMap<>();
-                
+
                 if (addr.getCountry() != null) {
                     addressComponent.put("country", addr.getCountry());
                 }
@@ -90,7 +105,7 @@ public class LocationController {
                 if (addr.getAdcode() != null) {
                     addressComponent.put("adcode", addr.getAdcode());
                 }
-                
+
                 data.put("addressComponent", addressComponent);
             }
 
@@ -99,7 +114,7 @@ public class LocationController {
 
             response.put("success", true);
             response.put("data", data);
-            
+
             log.info("成功返回详细地址信息：{}", data);
             return ResponseEntity.ok(response);
 
@@ -110,5 +125,51 @@ public class LocationController {
             return ResponseEntity.internalServerError().body(response);
         }
     }
+
+    /**
+     * 获取高德地图配置（前端 JS SDK 使用）
+     * 通过后端代理，避免 API Key 硬编码在前端
+     * <p>
+     * 注意：这里返回的是 JS API Key，不是 Web服务 Key
+     *
+     * @return 高德地图配置（key + securityJsCode）
+     */
+    @GetMapping("/amap-config")
+    public ResponseEntity<Map<String, String>> getAmapConfig() {
+        log.info("前端请求获取高德地图 JS SDK 配置");
+
+        Map<String, String> config = new HashMap<>();
+        // 返回 JS API Key（用于前端浏览器定位）
+        config.put("key", amapJsApiKey);
+
+        // 安全密钥是可选的，如果配置了就返回
+        if (securityJsCode != null && !securityJsCode.trim().isEmpty()) {
+            config.put("securityJsCode", securityJsCode);
+            log.info("返回高德 JS API 配置（包含安全密钥）");
+        } else {
+            log.info("返回高德 JS API 配置（无安全密钥）");
+        }
+
+        return ResponseEntity.ok(config);
+    }
+
+    /**
+     * AI 智能判断用户消息是否需要位置信息
+     * 替代前端关键词匹配，更准确、更智能
+     *
+     * @param request 包含用户消息的请求体
+     * @return 是否需要位置信息
+     */
+    @PostMapping("/check-location-need")
+    public ResponseEntity<Map<String, Boolean>> checkLocationNeed(@RequestBody Map<String, String> request) {
+        String message = request.get("message");
+        log.info("AI 判断是否需要位置，用户消息: {}", message);
+
+        // 调用 Service 层进行 AI 判断
+        boolean needLocation = locationAiService.checkIfNeedLocation(message);
+
+        return ResponseEntity.ok(Map.of("needLocation", needLocation));
+    }
+
 }
 

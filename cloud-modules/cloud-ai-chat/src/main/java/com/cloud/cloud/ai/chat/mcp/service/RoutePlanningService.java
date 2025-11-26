@@ -20,7 +20,8 @@ import reactor.core.publisher.Mono;
 @Slf4j
 public class RoutePlanningService {
 
-    @Value("${map.api-key}")
+    // 使用 Web服务 Key（后端 HTTP API 调用）
+    @Value("${map.web-service-key}")
     private String apiKey;
 
     //Spring name match 注入问题 匹配MapConfig的amapWebClient
