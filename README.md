@@ -161,15 +161,125 @@ ModelProvider provider = modelSelector.selectModelProvider(context);
 
 ---
 
-### 2. 图片处理 2.0 - MinIO + OCR + 多模态回流 🖼️
+### 2. 多模态工具 Provider 架构 - OCR & ASR 🛠️
 
-#### 2.1 完整流程
+#### 2.0 架构理念：工具 vs 对话模型
+
+多模态能力（OCR、ASR）虽然也是 AI 模型，但与 SPI 机制下的 `ModelProvider` **有本质区别**：
+
+| 对比维度 | ModelProvider (对话模型) | OCR/ASR Provider (多模态工具) |
+|---------|-------------------------|------------------------------|
+| **定位** | 核心对话引擎 | 前置数据处理工具 |
+| **调用时机** | 用户发起对话时 | 对话前的预处理阶段 |
+| **记忆联想** | ✅ 需要上下文记忆 | ❌ 无状态，单次处理 |
+| **流式输出** | ✅ 支持 SSE 流式响应 | ❌ 同步返回结果 |
+| **Function Calling** | ✅ 支持工具调用 | ❌ 仅做数据转换 |
+| **典型场景** | 聊天对话、RAG 问答 | 图片识别、语音转文字 |
+
+**核心思想**：OCR/ASR 是**数据格式转换器**，将图片/音频转为文本后，再交给 ModelProvider 进行对话。
+
+#### 2.1 OCR/ASR 统一 Provider 架构
+
+与 ModelProvider 类似，OCR/ASR 也采用 **Provider SPI 机制**，但更加轻量：
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                     多模态工具层                              │
+├─────────────────────────────────────────────────────────────┤
+│  AsrProvider (接口)          OcrProvider (接口)              │
+│  ├─ DashScopeAsrProvider     ├─ DashScopeOcrProvider        │
+│  ├─ BaiduAsrProvider         ├─ BaiduOcrProvider            │
+│  └─ TencentAsrProvider       └─ TencentOcrProvider          │
+├─────────────────────────────────────────────────────────────┤
+│  AsrProviderManager          OcrProviderManager             │
+│  (自动发现、优先级、降级)                                      │
+├─────────────────────────────────────────────────────────────┤
+│  AsrService                  OCRService                      │
+│  (业务调度层，无 SDK 耦合)                                     │
+└─────────────────────────────────────────────────────────────┘
+```
+
+**核心代码示例**：
+
+```java
+// 1. Provider 接口定义
+public interface AsrProvider {
+    String getProviderName();          // dashscope/baidu/tencent
+    String[] getSupportedFormats();    // ["wav", "mp3", "pcm"]
+    String recognizeAudio(MultipartFile audioFile);
+    int getPriority();                 // 优先级
+    default boolean isEnabled() { return true; }
+}
+
+// 2. DashScope 实现
+@Component
+@ConditionalOnProperty(
+    prefix = "ai.provider.asr.dashscope",
+    name = "enabled",
+    havingValue = "true",
+    matchIfMissing = true  // 默认启用
+)
+public class DashScopeAsrProvider implements AsrProvider {
+    @Override
+    public String recognizeAudio(MultipartFile audioFile) {
+        // 调用 DashScope ASR SDK
+    }
+}
+
+// 3. 业务层调用（无 SDK 耦合）
+@Service
+public class AsrService {
+    private final AsrProviderManager providerManager;
+    
+    public String recognizeAudio(MultipartFile audioFile) {
+        AsrProvider provider = providerManager.getDefaultProvider();
+        return provider.recognizeAudio(audioFile);
+    }
+}
+```
+
+**技术亮点**：
+- ✅ **配置驱动**：通过 YAML 动态启用/禁用 Provider
+- ✅ **多厂商支持**：阿里云、百度、腾讯等快速接入
+- ✅ **自动降级**：主 Provider 失败时切换备用
+- ✅ **零业务侵入**：Service 层无 SDK 依赖，易于测试
+
+#### 2.2 配置示例
+
+```yaml
+ai:
+  provider:
+    # ASR 语音识别
+    asr:
+      dashscope:
+        enabled: true          # 启用/禁用
+        model: fun-asr-realtime
+        sample-rate: 16000
+        priority: 1            # 优先级（越小越高）
+      # 未来扩展其他厂商
+      baidu:
+        enabled: false
+        priority: 5
+    
+    # OCR 文字识别
+    ocr:
+      dashscope:
+        enabled: true
+        model: qwen-vl-ocr
+        priority: 1
+```
+
+---
+
+### 3. 图片处理 2.0 - MinIO + OCR + 多模态回流 🖼️
+
+#### 3.1 完整流程
 
 ```
 图片上传 → MinIO存储（原图+预览） → DashScope OCR → 文字/结构化JSON → MongoDB元数据 → ChatContext 增强
 ```
 
-#### 2.2 核心能力
+#### 3.2 核心能力
 
 - 📤 **多种上传形态**：表单文件、Base64、批量粘贴全部打通。
 - ☁️ **MinIO 分层存储**：按日期生成层级路径，前端直接访问公网地址。
@@ -177,7 +287,7 @@ ModelProvider provider = modelSelector.selectModelProvider(context);
 - 🧠 **Prompt 自动增强**：在 `AIChatService.enhanceQueryWithOCR` 中将 OCR 文本拼接到用户提问，实现“看图说话”。
 - 🧩 **多模态模型切换**：存在图片即自动路由到 `qwen-vl-ocr` 等 Vision 模型。
 
-#### 2.3 技术实现
+#### 3.3 技术实现
 
 ```yaml
 minio:
@@ -197,7 +307,7 @@ public class Image {
 
 ---
 
-### 3. 联网 & MCP 工具生态 🌐
+### 4. 联网 & MCP 工具生态 🌐
 
 | 功能 | 技术 | 亮点 |
 |------|------|------|
@@ -206,7 +316,7 @@ public class Image {
 | Location 工具 | MCP + 浏览器定位 | 前端自动捕获经纬度、后端写入 Prompt |
 | Route Planning 工具 | MCP + 高德路径规划 2.0 | 支持驾车/步行/骑行，自动地理编码 |
 
-#### 3.1 Route Planning MCP 🧭
+#### 4.1 Route Planning MCP 🧭
 
 ```mermaid
 flowchart LR
@@ -232,24 +342,24 @@ chatClient.prompt(query).options(options).stream();
 
 ---
 
-### 4. 地理位置体验优化 📍
+### 5. 地理位置体验优化 📍
 
-#### 4.1 前端能力
+#### 5.1 前端能力
 
 - 监听“路线/导航/怎么去”等关键词自动触发定位。
 - 若只提到目的地，会把定位坐标放在 `locationParam` 里，避免打扰用户。
 - 定位失败会给出浏览器权限指引。
 
-#### 4.2 后端处理
+#### 5.2 后端处理
 
 - `AIChatService.buildChatContext` 将经纬度转成 `[我的当前位置坐标：lng,lat]` 注入 Prompt，方便 MCP 工具消费。
 - Route Planning 工具优先使用显式坐标；若缺失则再次调用地理编码补全。
 
 ---
 
-### 4. 用户画像系统 👤
+### 6. 用户画像系统 👤
 
-#### 4.1 数据模型
+#### 6.1 数据模型
 
 **基础画像**（`UserProfile`）：
 ```java
@@ -306,9 +416,9 @@ chatClient.prompt(query).options(options).stream();
 
 ---
 
-### 5. 标签衰减机制 - 保持时效性 ⏱️
+### 7. 标签衰减机制 - 保持时效性 ⏱️
 
-#### 5.1 半因子衰减
+#### 7.1 半因子衰减
 
 **定时任务**（每月1号凌晨2点）：
 ```java
@@ -336,15 +446,15 @@ public void monthlyWeightDecay() {
 
 ---
 
-### 6. 首页个性推荐 🎯
+### 8. 首页个性推荐 🎯
 
-#### 6.1 工作流程
+#### 8.1 工作流程
 
 ```
 用户ID → 获取热门标签（Top 5）→ AI生成推荐提问 → Redis缓存24小时
 ```
 
-#### 6.2 核心实现
+#### 8.2 核心实现
 
 ```java
 public Map<String, Object> generatePersonalizedRecommendations(Long userId, int limit) {
@@ -390,9 +500,9 @@ recommendation:user:{userId}:{weightSum/10}
 
 ---
 
-### 7. 对话个性引导 💬
+### 9. 对话个性引导 💬
 
-#### 7.1 智能追问
+#### 9.1 智能追问
 
 **在对话结束时自动推荐相关话题**：
 
@@ -445,9 +555,9 @@ Spring AI 是一个用于构建 AI 应用的框架...
 
 ---
 
-### 8. AI 对话调度
+### 10. AI 对话调度
 
-#### 8.1 非流式对话
+#### 10.1 非流式对话
 - **简单对话**：一次性返回完整响应
 - 适用场景：简短问答、快速查询
 - API 示例：
@@ -482,9 +592,9 @@ Flux<String> contentFlux = chatClient.prompt(query)
 
 ---
 
-### 9. 记忆与上下文管理
+### 11. 记忆与上下文管理
 
-#### 9.1 短期记忆（Redis）
+#### 11.1 短期记忆（Redis）
 - **基于 Redis 的滑动窗口记忆**
 - 自动保留最近 20 轮对话
 - 跨请求持久化，支持会话恢复
@@ -520,16 +630,16 @@ public class ChatMessage {
 }
 ```
 
-#### 9.3 会话管理
+#### 11.2 会话管理
 - **自动生成会话标题**：使用 LLM 总结对话主题
 - **会话列表管理**：支持多会话并发
 - **消息计数统计**：追踪会话活跃度
 
 ---
 
-### 10. LLM 增强（RAG）
+### 12. LLM 增强（RAG）
 
-#### 10.1 RAG 工作流程
+#### 12.1 RAG 工作流程
 
 ```
 用户提问
@@ -584,14 +694,14 @@ private String buildRagPrompt(String userQuery, List<Document> docs) {
 
 ---
 
-### 11. 向量数据库（PgVector）
+### 13. 向量数据库（PgVector）
 
-#### 11.1 技术选型
+#### 13.1 技术选型
 - **PostgreSQL + pgvector 扩展**
 - 支持高维向量存储与相似度搜索
 - 与关系型数据无缝集成
 
-#### 11.2 文档处理流程
+#### 13.2 文档处理流程
 
 ```
 文档上传
@@ -645,9 +755,9 @@ private List<String> chunkTextBySemantic(
 
 ---
 
-### 12. AI 模型配置
+### 14. AI 模型配置
 
-#### 12.1 默认模型配置
+#### 14.1 默认模型配置
 
 ```java
 @Bean
@@ -666,7 +776,7 @@ public ChatClient chatClient(ChatClient.Builder builder) {
 }
 ```
 
-#### 12.2 可调参数
+#### 14.2 可调参数
 
 - **模型选择**：qwen-turbo / qwen-plus / qwen-max
 - **温度（Temperature）**：控制回答随机性
@@ -675,15 +785,15 @@ public ChatClient chatClient(ChatClient.Builder builder) {
 
 ---
 
-### 13. 安全认证（JWT）
+### 15. 安全认证（JWT）
 
-#### 13.1 架构特点
+#### 15.1 架构特点
 
 - **无状态认证**：用户信息存储在 JWT 中
 - **条件化加载**：System 模块完整认证，Chat 模块简化认证
 - **跨模块共享**：统一的 JWT Token
 
-#### 13.2 工作流程
+#### 15.2 工作流程
 
 **System 模块**（完整认证）：
 ```
