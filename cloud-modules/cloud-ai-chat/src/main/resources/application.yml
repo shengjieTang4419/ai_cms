@@ -72,3 +72,32 @@ app:
 
 ai:
   guide: false
+  # AI Provider 配置
+  provider:
+    # ASR 语音识别配置
+    asr:
+      dashscope:
+        enabled: true  # 启用阿里云DashScope ASR
+        model: fun-asr-realtime  # 语音识别模型（支持格式：pcm/wav/mp3/opus/speex/aac/amr）
+        sample-rate: 16000  # 采样率
+        priority: 1  # 优先级，数字越小优先级越高
+      # 其他Provider示例（暂未实现）
+      # baidu:
+      #   enabled: false
+      #   app-id: ${BAIDU_APP_ID:}
+      #   api-key: ${BAIDU_API_KEY:}
+      #   secret-key: ${BAIDU_SECRET_KEY:}
+      #   priority: 5
+
+    # OCR 文字识别配置
+    ocr:
+      dashscope:
+        enabled: true  # 启用阿里云DashScope OCR
+        model: qwen-vl-ocr  # OCR模型
+        priority: 1  # 优先级
+      # 其他Provider示例（暂未实现）
+      # baidu:
+      #   enabled: false
+      #   api-key: ${BAIDU_OCR_API_KEY:}
+      #   secret-key: ${BAIDU_OCR_SECRET_KEY:}
+      #   priority: 5
