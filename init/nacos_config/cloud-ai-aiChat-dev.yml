@@ -1,0 +1,94 @@
+server:
+  port: 18080
+
+spring:
+  # 数据库配置
+  datasource:
+    url: jdbc:postgresql://127.0.0.1:5432/cms
+    username: postgres
+    password: 'small@123$%^'
+    driver-class-name: org.postgresql.Driver
+  
+  # JPA配置
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          time_zone: Asia/Shanghai
+  
+  # Redis配置
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: 123456
+      database: 0
+    
+    # MongoDB配置
+    mongodb:
+      uri: mongodb://root:sangfor!%40%23123@127.0.0.1:27017/aiChat?authSource=admin
+  
+  # Spring AI配置
+  ai:
+    dashscope:
+      api-key: ${DASHSCOPE_API_KEY}
+    mcp:
+      server:
+        base-url: /api/mcp
+        type: ASYNC
+  
+  # 文件上传配置
+  servlet:
+    multipart:
+      max-file-size: 50MB
+      max-request-size: 50MB
+
+# 日志配置
+logging:
+  level:
+    com.cloud.cloud.ai.chat.mcp.service: DEBUG
+    reactor.netty.http.client: INFO
+    org.springframework.ai.chat.client: DEBUG
+    org.springframework.ai.tool: DEBUG
+
+# 高德地图配置
+map:
+  web-service-key: ${AMAP_API_KEY}
+  js-api-key: ${AMAP_JS_API_KEY}
+  security-js-code: ${AMAP_SECURITY_CODE:}
+
+# MinIO配置
+minio:
+  endpoint: http://localhost:9000
+  access-key: minioadmin
+  secret-key: minioadmin123
+  bucket-name: images
+  public-url:
+
+# 应用配置
+app:
+  base-url: http://localhost:18080
+
+# AI Provider配置
+ai:
+  guide: false
+  provider:
+    # ASR语音识别
+    asr:
+      dashscope:
+        enabled: true
+        model: fun-asr-realtime
+        sample-rate: 16000
+        priority: 1
+    
+    # OCR文字识别
+    ocr:
+      dashscope:
+        enabled: true
+        model: qwen-vl-ocr
+        priority: 1

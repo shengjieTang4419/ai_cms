@@ -1,0 +1,34 @@
+server:
+  port: 18081
+
+spring:
+  # 数据库配置
+  datasource:
+    url: jdbc:postgresql://127.0.0.1:5432/cms
+    username: postgres
+    password: 'small@123$%^'
+    driver-class-name: org.postgresql.Driver
+  
+  # JPA配置
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          time_zone: Asia/Shanghai
+  
+  # Redis配置
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: 123456
+      database: 0
+    
+    # MongoDB配置
+    mongodb:
+      uri: mongodb://root:sangfor!%40%23123@127.0.0.1:27017/aiChat?authSource=admin
