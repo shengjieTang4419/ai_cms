@@ -1,0 +1,13 @@
+spring:
+  application:
+    # 应用名称
+    name: cloud-gateway
+  profiles:
+    # 环境配置
+    active: dev
+  cloud:
+    nacos:
+      config:
+        file-extension: yml
+        shared-configs:
+          - application-${spring.profiles.active}.${spring.cloud.nacos.config.file-extension}

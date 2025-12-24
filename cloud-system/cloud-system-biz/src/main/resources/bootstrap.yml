@@ -1,0 +1,16 @@
+# Spring
+spring:
+  application:
+    # 应用名称
+    name: cloud-system
+  profiles:
+    # 环境配置
+    active: dev
+  cloud:
+    nacos:
+      config:
+        # 配置文件格式
+        file-extension: yml
+        # 共享配置
+        shared-configs:
+          - application-${spring.profiles.active}.${spring.cloud.nacos.config.file-extension}
