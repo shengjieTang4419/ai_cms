@@ -2,14 +2,22 @@ package com.cloud.ai.chat.service.impl;
 
 
 import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
+import com.alibaba.dashscope.aigc.generation.Generation;
+import com.alibaba.dashscope.aigc.generation.GenerationParam;
+import com.alibaba.dashscope.aigc.generation.GenerationResult;
+import com.alibaba.dashscope.common.Message;
+import com.alibaba.dashscope.common.Role;
+import com.alibaba.dashscope.exception.ApiException;
+import com.alibaba.dashscope.exception.InputRequiredException;
+import com.alibaba.dashscope.exception.NoApiKeyException;
 import com.cloud.ai.chat.domain.ChatContext;
 import com.cloud.ai.chat.domain.Image;
 import com.cloud.ai.chat.helper.ChatAnalysisHelper;
 import com.cloud.ai.chat.helper.ChatSuggestionHelper;
-import com.cloud.ai.chat.mcp.tools.office.PersonalizedRecommendationMcpTool;
 import com.cloud.ai.chat.provider.ModelProvider;
 import com.cloud.ai.chat.util.ModelSelector;
 import com.cloud.common.security.SecurityUtils;
+import io.reactivex.Flowable;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -22,7 +30,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 import reactor.core.publisher.Flux;
+import reactor.core.scheduler.Schedulers;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -44,11 +54,14 @@ public class AIChatService {
     private final PgVectorStore vectorStore;
     private final ChatAnalysisHelper chatAnalysisHelper;
     private final ImageService imageService;
-    private final PersonalizedRecommendationMcpTool personalizedRecommendationMcpTool;
     private final ChatSuggestionHelper chatSuggestionHelper;
+    private final ChatMemory chatMemory;
 
     @Value("${ai.guide:true}")
     private boolean aiGuide;
+
+    @Value("${spring.ai.dashscope.api-key}")
+    private String apiKey;
 
     /**
      * 根据聊天上下文获取ChatClient实例
@@ -169,6 +182,17 @@ public class AIChatService {
      * @param isThinking    是否是Thinking模型（需要输出推理过程）
      */
     private Flux<String> buildRequestStream(ChatClient chatClient, String enhancedQuery, String sessionId, boolean isWebSearch, boolean isThinking) {
+        // 如果启用思考模型，直接使用DashScope SDK来获取完整的思考过程
+        if (isThinking) {
+            log.info("为本次请求启用DashScope思考模型功能，sessionId: {}", sessionId);
+            // 获取优先级最高的支持Thinking的模型
+            ModelProvider thinkingProvider = modelSelector.getProviderManager().getThinkingProvider();
+            String modelName = thinkingProvider.getModelName();
+            log.info("使用Thinking模型: {} ({})", thinkingProvider.getDisplayName(), modelName);
+            return buildThinkingStreamWithDashScope(enhancedQuery, sessionId, modelName, isWebSearch);
+        }
+
+        // 非思考模型，使用Spring AI的ChatClient
         var promptBuilder = chatClient.prompt(enhancedQuery)
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, sessionId));
 
@@ -181,45 +205,136 @@ public class AIChatService {
             log.info("为本次请求启用DashScope全网搜索功能，sessionId: {}", sessionId);
         }
 
-        // Thinking模型必须启用enable_thinking参数
-        if (isThinking) {
-            optionsBuilder.withEnableThinking(true);
-            log.info("为本次请求启用DashScope思考模型功能，sessionId: {}", sessionId);
-        }
-
         DashScopeChatOptions requestOptions = optionsBuilder.build();
         promptBuilder = promptBuilder.options(requestOptions);
 
-        // 如果启用思考模型，需要处理reasoning content和content两部分
-        // Spring AI的ChatClient可能不直接暴露reasoning content，我们通过流式响应处理
-        if (isThinking) {
-            return buildThinkingStream(promptBuilder);
-        } else {
-            return promptBuilder.stream().content();
-        }
+        return promptBuilder.stream().content();
     }
 
     /**
-     * 构建思考模型的流式响应（包含思考过程和最终回复）
-     * 通过处理流式响应，尝试提取reasoning content和content
+     * 使用DashScope SDK直接调用思考模型，获取思考过程和最终回复
      * <p>
-     * 注意：由于Spring AI的ChatClient可能不直接暴露reasoning content，
-     * 我们暂时只返回content。如果需要完整的思考过程，建议直接使用DashScope的底层API。
-     * 参考官方示例：https://bailian.console.aliyun.com/?tab=model#/model-market/detail/qwen3-next-80b-a3b-thinking
+     * 返回格式使用特殊标记，方便前端解析：
+     * [THINKING_START]思考过程内容[THINKING_END]
+     * [ANSWER_START]最终回答内容[ANSWER_END]
+     *
+     * @param userQuery 用户查询
+     * @param sessionId 会话ID
+     * @param modelName 模型名称
+     * @param enableSearch 是否启用全网搜索
+     * @return 包含思考过程和最终回复的流
      */
-    private Flux<String> buildThinkingStream(ChatClient.ChatClientRequestSpec promptBuilder) {
-        // 目前Spring AI的ChatClient可能不直接支持reasoning content的获取
-        // 我们暂时返回普通content，后续可以通过以下方式支持：
-        // 1. 升级Spring AI版本（如果后续版本支持）
-        // 2. 直接使用DashScope的底层API（参考官方示例代码）
-        // 3. 通过反射从底层响应中提取reasoning content（需要深入了解Spring AI的实现）
+    private Flux<String> buildThinkingStreamWithDashScope(String userQuery, String sessionId, String modelName, boolean enableSearch) {
+        return Flux.defer(() -> {
+            try {
+                Generation gen = new Generation();
+                // 构建消息列表（包含历史对话）
+                List<Message> messages = buildMessagesFromHistory(userQuery, sessionId);
 
-        log.info("思考模型已启用，但当前实现可能无法获取完整的思考过程");
-        log.info("建议：如果需要完整的思考过程，请参考官方示例直接使用DashScope的Generation API");
+                // 构建请求参数
+                GenerationParam param = GenerationParam.builder()
+                        .apiKey(apiKey)
+                        .model(modelName)
+                        .enableThinking(true)           // 启用思考模式
+                        .incrementalOutput(true)        // 启用增量输出（流式）
+                        .resultFormat("message")        // 使用message格式
+                        .enableSearch(enableSearch)
+                        .messages(messages)
+                        .build();
 
-        // 暂时返回普通content流
-        return promptBuilder.stream().content();
+                // 流式调用 - 将RxJava的Flowable转换为Reactor的Flux
+                Flowable<GenerationResult> rxFlowable = gen.streamCall(param);
+
+                boolean[] thinkingStarted = {false};
+                boolean[] answerStarted = {false};
+
+                // 将RxJava Flowable转换为Reactor Flux，实现真正的流式输出
+                return Flux.from(rxFlowable)
+                        .flatMap(message -> {
+                            try {
+                                String reasoning = message.getOutput().getChoices().get(0).getMessage().getReasoningContent();
+                                String content = message.getOutput().getChoices().get(0).getMessage().getContent();
+
+                                List<String> chunks = new ArrayList<>();
+
+                                // 处理思考过程
+                                if (reasoning != null && !reasoning.isEmpty()) {
+                                    if (!thinkingStarted[0]) {
+                                        chunks.add("[THINKING_START]");
+                                        thinkingStarted[0] = true;
+                                    }
+                                    chunks.add(reasoning);
+                                }
+
+                                // 如果思考过程结束，添加结束标记
+                                if (thinkingStarted[0] && (content != null && !content.isEmpty()) && !answerStarted[0]) {
+                                    chunks.add("[THINKING_END]");
+                                }
+
+                                // 处理最终回复
+                                if (content != null && !content.isEmpty()) {
+                                    if (!answerStarted[0]) {
+                                        chunks.add("[ANSWER_START]");
+                                        answerStarted[0] = true;
+                                    }
+                                    chunks.add(content);
+                                }
+
+                                return Flux.fromIterable(chunks);
+                            } catch (Exception e) {
+                                log.error("处理思考模型响应时出错", e);
+                                return Flux.error(e);
+                            }
+                        })
+                        .concatWith(Flux.defer(() -> {
+                            // 在流结束时添加结束标记
+                            if (answerStarted[0]) {
+                                log.info("思考模型响应完成，sessionId: {}", sessionId);
+                                return Flux.just("[ANSWER_END]");
+                            }
+                            return Flux.empty();
+                        }));
+
+            } catch (NoApiKeyException | ApiException | InputRequiredException e) {
+                log.error("调用DashScope思考模型失败", e);
+                return Flux.error(e);
+            }
+        }).subscribeOn(Schedulers.boundedElastic());
     }
+
+    /**
+     * 从ChatMemory构建消息列表（包含历史对话）
+     */
+    private List<Message> buildMessagesFromHistory(String userQuery, String sessionId) {
+        List<Message> messages = new ArrayList<>();
+
+        // 从ChatMemory获取历史对话
+        List<org.springframework.ai.chat.messages.Message> historyMessages = chatMemory.get(sessionId);
+
+        // 转换为DashScope的Message格式
+        for (org.springframework.ai.chat.messages.Message msg : historyMessages) {
+            String role = switch (msg.getMessageType()) {
+                case USER -> Role.USER.getValue();
+                case ASSISTANT -> Role.ASSISTANT.getValue();
+                case SYSTEM -> Role.SYSTEM.getValue();
+                default -> Role.USER.getValue();
+            };
+
+            messages.add(Message.builder()
+                    .role(role)
+                    .content(msg.getText())
+                    .build());
+        }
+
+        // 添加当前用户消息
+        messages.add(Message.builder()
+                .role(Role.USER.getValue())
+                .content(userQuery)
+                .build());
+
+        return messages;
+    }
+
 
     /**
      * 处理响应流：收集内容、追加推荐、保存消息
@@ -241,7 +356,7 @@ public class AIChatService {
                     // 保存消息
                     saveMessages(userId, sessionId, dialogueId, originQuery, imageList, completeResponse, isRagEnhanced);
                     // 异步分析聊天内容并更新用户标签
-                    //analyzeChatContentAsync(userId, sessionId, originQuery, completeResponse);
+                    analyzeChatContentAsync(userId, sessionId, originQuery, completeResponse);
                 });
     }
 

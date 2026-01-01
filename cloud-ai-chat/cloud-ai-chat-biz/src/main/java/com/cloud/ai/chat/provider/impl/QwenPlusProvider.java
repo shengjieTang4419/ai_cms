@@ -12,19 +12,17 @@ import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.stereotype.Component;
 
 /**
- * 通义千问Thinking模型提供者
- * <p>
- * 支持思考推理过程输出的模型，优先级最高，默认使用
+ * 通义千问Plus模型提供者
  *
  * @author shengjie.tang
  * @version 1.0.0
- * @description: Thinking模型，支持推理过程输出
- * @date 2025/01/16
+ * @description: Plus模型
+ * @date 2025/12/31 17:01
  */
 @Component
 @RequiredArgsConstructor
 @Slf4j
-public class QwenThinkingProvider implements ModelProvider {
+public class QwenPlusProvider implements ModelProvider {
 
     private final ChatClient.Builder chatClientBuilder;
     private final ChatMemoryFactory chatMemoryFactory;
@@ -41,18 +39,23 @@ public class QwenThinkingProvider implements ModelProvider {
                 chatMemoryFactory,
                 promptLoader,
                 toolCallbackProvider,
-                QwenThinkingProvider.class.getSimpleName()
+                QwenPlusProvider.class.getSimpleName()
         );
     }
 
     @Override
     public String getModelName() {
-        return "qwen3-next-80b-a3b-thinking";
+        return "qwen-plus";
     }
 
     @Override
     public String getDisplayName() {
-        return "通义千问Thinking（推理版）";
+        return "通义千问Plus";
+    }
+
+    @Override
+    public boolean supportsThinking() {
+        return true;
     }
 
     @Override
@@ -66,18 +69,13 @@ public class QwenThinkingProvider implements ModelProvider {
     }
 
     @Override
-    public boolean supportsThinking() {
-        return true;
-    }
-
-    @Override
     public ChatClient getChatClient() {
         return chatClient;
     }
 
     @Override
     public int getPriority() {
-        return 3;
+        //趁着他还有免费的额度 先用了再说
+        return 1;
     }
 }
-

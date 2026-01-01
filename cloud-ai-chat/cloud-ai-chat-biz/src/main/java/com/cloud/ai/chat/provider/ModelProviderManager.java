@@ -1,6 +1,7 @@
 package com.cloud.ai.chat.provider;
 
 import jakarta.annotation.PostConstruct;
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.context.ApplicationContext;
@@ -26,6 +27,11 @@ public class ModelProviderManager {
     private ApplicationContext applicationContext;
 
     private final Map<String, ModelProvider> providers = new HashMap<>();
+    /**
+     * -- GETTER --
+     * 获取默认Provider
+     */
+    @Getter
     private ModelProvider defaultProvider;
 
     @PostConstruct
@@ -105,13 +111,6 @@ public class ModelProviderManager {
     }
 
     /**
-     * 获取默认Provider
-     */
-    public ModelProvider getDefaultProvider() {
-        return defaultProvider;
-    }
-
-    /**
      * 根据是否需要Vision功能获取合适的Provider
      */
     public ModelProvider getProviderByCapability(boolean needsVision) {
@@ -122,6 +121,21 @@ public class ModelProviderManager {
                     .orElse(defaultProvider);
         }
         return defaultProvider;
+    }
+
+    /**
+     * 获取优先级最高的支持Thinking的Provider
+     * 
+     * @return 支持Thinking的Provider，如果没有则返回默认Provider
+     */
+    public ModelProvider getThinkingProvider() {
+        return providers.values().stream()
+                .filter(ModelProvider::supportsThinking)
+                .min(Comparator.comparingInt(ModelProvider::getPriority))
+                .orElseGet(() -> {
+                    log.warn("没有找到支持Thinking的模型，使用默认模型");
+                    return defaultProvider;
+                });
     }
 
     /**

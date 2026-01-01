@@ -1,15 +1,13 @@
 package com.cloud.ai.chat.provider.impl;
 
-import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
 import com.cloud.ai.chat.config.ChatMemoryFactory;
+import com.cloud.ai.chat.helper.ChatClientHelper;
 import com.cloud.ai.chat.provider.ModelProvider;
 import com.cloud.ai.chat.util.PromptLoader;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
-import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
-import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.ai.tool.ToolCallbackProvider;
 import org.springframework.stereotype.Component;
 
@@ -31,7 +29,19 @@ public class QwenTurboProvider implements ModelProvider {
     private final PromptLoader promptLoader;
     private final ToolCallbackProvider toolCallbackProvider;
 
-    private volatile ChatClient chatClientInstance;
+    private ChatClient chatClient;
+
+    @PostConstruct
+    public void init() {
+        this.chatClient = ChatClientHelper.buildChatClient(
+                chatClientBuilder,
+                getModelName(),
+                chatMemoryFactory,
+                promptLoader,
+                toolCallbackProvider,
+                QwenTurboProvider.class.getSimpleName()
+        );
+    }
 
     @Override
     public String getModelName() {
@@ -55,41 +65,12 @@ public class QwenTurboProvider implements ModelProvider {
 
     @Override
     public ChatClient getChatClient() {
-        if (chatClientInstance == null) {
-            synchronized (this) {
-                if (chatClientInstance == null) {
-                    MessageWindowChatMemory memory = chatMemoryFactory.chatMemory(
-                            chatMemoryFactory.redisChatMemoryRepository());
-                    String systemPrompt = promptLoader.loadSystemPrompt();
-
-                    var builder = chatClientBuilder
-                            .defaultSystem(systemPrompt)
-                            .defaultAdvisors(new SimpleLoggerAdvisor(),
-                                    MessageChatMemoryAdvisor.builder(memory).build())
-                            .defaultOptions(DashScopeChatOptions.builder()
-                                    .withModel(this.getModelName())
-                                    .withTopP(0.7)
-                                    .build());
-
-                    // 注册MCP工具
-                    if (toolCallbackProvider != null && toolCallbackProvider.getToolCallbacks().length > 0) {
-                        builder.defaultToolCallbacks(toolCallbackProvider.getToolCallbacks());
-                        log.info("✅ 已注册 {} 个工具回调", toolCallbackProvider.getToolCallbacks().length);
-                    } else {
-                        log.warn("⚠️ 未找到工具回调提供者或工具列表为空");
-                    }
-
-                    chatClientInstance = builder.build();
-                    log.info("✅ QwenTurboProvider初始化完成，系统提示词长度: {} 字符", systemPrompt.length());
-                }
-            }
-        }
-        return chatClientInstance;
+        return chatClient;
     }
 
     @Override
     public int getPriority() {
-        return 10; // 默认优先级
+        return 10;
     }
 }
 

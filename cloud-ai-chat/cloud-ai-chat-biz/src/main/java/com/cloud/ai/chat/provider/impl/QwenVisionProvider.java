@@ -1,15 +1,13 @@
 package com.cloud.ai.chat.provider.impl;
 
-import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
 import com.cloud.ai.chat.config.ChatMemoryFactory;
+import com.cloud.ai.chat.helper.ChatClientHelper;
 import com.cloud.ai.chat.provider.ModelProvider;
 import com.cloud.ai.chat.util.PromptLoader;
+import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.ai.chat.client.advisor.MessageChatMemoryAdvisor;
-import org.springframework.ai.chat.client.advisor.SimpleLoggerAdvisor;
-import org.springframework.ai.chat.memory.MessageWindowChatMemory;
 import org.springframework.stereotype.Component;
 
 /**
@@ -29,7 +27,18 @@ public class QwenVisionProvider implements ModelProvider {
     private final ChatMemoryFactory chatMemoryFactory;
     private final PromptLoader promptLoader;
 
-    private volatile ChatClient chatClientInstance;
+    private ChatClient chatClient;
+
+    @PostConstruct
+    public void init() {
+        this.chatClient = ChatClientHelper.buildSimpleChatClient(
+                chatClientBuilder,
+                getModelName(),
+                chatMemoryFactory,
+                promptLoader,
+                QwenVisionProvider.class.getSimpleName()
+        );
+    }
 
     @Override
     public String getModelName() {
@@ -53,28 +62,7 @@ public class QwenVisionProvider implements ModelProvider {
 
     @Override
     public ChatClient getChatClient() {
-        if (chatClientInstance == null) {
-            synchronized (this) {
-                if (chatClientInstance == null) {
-                    MessageWindowChatMemory memory = chatMemoryFactory.chatMemory(
-                            chatMemoryFactory.redisChatMemoryRepository());
-                    String systemPrompt = promptLoader.loadSystemPrompt();
-
-                    chatClientInstance = chatClientBuilder
-                            .defaultSystem(systemPrompt)
-                            .defaultAdvisors(new SimpleLoggerAdvisor(),
-                                    MessageChatMemoryAdvisor.builder(memory).build())
-                            .defaultOptions(DashScopeChatOptions.builder()
-                                    .withModel(this.getModelName())
-                                    .withTopP(0.7)
-                                    .build())
-                            .build();
-
-                    log.info("✅ QwenVisionProvider初始化完成");
-                }
-            }
-        }
-        return chatClientInstance;
+        return chatClient;
     }
 
     @Override
