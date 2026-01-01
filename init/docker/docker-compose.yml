@@ -16,6 +16,24 @@ services:
     networks:
       - cloud-network
 
+  cloud-nacos:
+    container_name: cloud-nacos
+    image: nacos/nacos-server
+    build:
+      context: ./nacos
+    environment:
+      - MODE=standalone
+      - TZ=Asia/Shanghai
+    volumes:
+      - ./nacos/logs/:/home/nacos/logs
+      - ./nacos/conf/application.properties:/home/nacos/conf/application.properties
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+      - "9849:9849"
+    networks:
+      - cloud-network
+
   cloud-mongodb:
     image: mongo:latest
     container_name: cloud-mongodb

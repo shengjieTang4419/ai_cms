@@ -1,0 +1,61 @@
+server:
+  port: 8080
+
+spring:
+  data:
+    redis:
+      host: 127.0.0.1
+      port: 6379
+      password: 123456
+      database: 0
+  cloud:
+    gateway:
+      discovery:
+        locator:
+          lowerCaseServiceId: true
+          enabled: true
+      routes:
+        - id: cloud-auth
+          uri: lb://cloud-auth
+          predicates:
+            - Path=/auth/**
+          filters:
+            - CacheRequestFilter
+            - StripPrefix=1
+    
+        - id: cloud-system
+          uri: lb://cloud-system
+          predicates:
+            - Path=/system/**
+          filters:
+            - StripPrefix=1
+
+        - id: cloud-ai-chat
+          uri: lb://cloud-ai-chat
+          predicates:
+            - Path=/aiChat/**
+          filters:
+            - StripPrefix=1
+
+        - id: cloud-membership
+          uri: lb://cloud-membership
+          predicates:
+            - Path=/membership/**
+          filters:
+            - StripPrefix=1
+ 
+security:
+  captcha:
+    enabled: false
+    type: math
+  xss:
+    enabled: true
+    excludeUrls:
+      - /system/notice
+  ignore:
+    whites:
+      - /auth/logout
+      - /auth/login
+      - /auth/register
+      - /*/v2/api-docs
+      - /csrf
