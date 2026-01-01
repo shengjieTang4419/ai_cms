@@ -20,7 +20,7 @@ import java.util.List;
  * @date 2025/9/21 15:18
  */
 @RestController
-@RequestMapping("/api/aiChat")
+@RequestMapping
 @RequiredArgsConstructor
 @Slf4j
 public class AiChatController {
@@ -37,23 +37,25 @@ public class AiChatController {
     public Flux<String> streamChat(
             @RequestParam("query") String query,
             @RequestParam("sessionId") String sessionId,
+            @RequestParam("dialogueId") String dialogueId,
             @RequestParam(value = "imageUrl", required = false) List<String> imageUrlList,
             @RequestParam(value = "isWithEnableSearch", defaultValue = "false") Boolean isWithEnableSearch,
             @RequestParam(value = "isDeepThinking", defaultValue = "false") Boolean isDeepThinking,
             @RequestParam(value = "longitude", required = false) String longitude,
             @RequestParam(value = "latitude", required = false) String latitude) {
-        return aiChatService.streamChat(query, sessionId, imageUrlList, isWithEnableSearch, isDeepThinking, longitude, latitude);
+        return aiChatService.streamChat(query, sessionId, dialogueId, imageUrlList, isWithEnableSearch, isDeepThinking, longitude, latitude);
     }
 
     @GetMapping("/rag/streamChat")
     public Flux<String> streamRAGChat(
             @RequestParam("query") String query,
             @RequestParam("sessionId") String sessionId,
+            @RequestParam("dialogueId") String dialogueId,
             @RequestParam(value = "imageUrl", required = false) List<String> imageUrlList,
             @RequestParam(value = "isWithEnableSearch", defaultValue = "false") Boolean isWithEnableSearch,
             @RequestParam(value = "isDeepThinking", defaultValue = "false") Boolean isDeepThinking,
             @RequestParam(value = "longitude", required = false) String longitude,
             @RequestParam(value = "latitude", required = false) String latitude) {
-        return aiChatService.ragStreamChat(query, sessionId, imageUrlList, isWithEnableSearch, isDeepThinking, longitude, latitude);
+        return aiChatService.ragStreamChat(query, sessionId, dialogueId, imageUrlList, isWithEnableSearch, isDeepThinking, longitude, latitude);
     }
 }

@@ -29,12 +29,17 @@ public class LoginUser {
     /**
      * 用户id
      */
-    private Integer userId;
+    private Long userId;
 
     /**
      * 用户名
      */
     private String userName;
+
+    /**
+     * 邮箱
+     */
+    private String email;
 
     /**
      * 密码
@@ -72,8 +77,10 @@ public class LoginUser {
     private Long expireTime;
 
 
-    public LoginUser(Integer userId, String userName) {
+    public LoginUser(Long userId, String userName) {
         this.userId = userId;
         this.userName = userName;
     }
+
+
 }

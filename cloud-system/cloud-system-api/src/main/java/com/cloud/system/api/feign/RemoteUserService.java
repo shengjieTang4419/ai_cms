@@ -8,6 +8,8 @@ import com.cloud.system.api.factory.RemoteUserFallbackFactory;
 import org.springframework.cloud.openfeign.FeignClient;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 
 /**
  * @author shengjie.tang
@@ -19,6 +21,9 @@ import org.springframework.web.bind.annotation.PathVariable;
 public interface RemoteUserService {
 
     @GetMapping("/user/info/{username}")
-    public R<LoginUser> info(@PathVariable("username") String username);
+    R<LoginUser> info(@PathVariable("username") String username);
+
+    @PostMapping("/user/register")
+    R<LoginUser> register(@RequestBody LoginUser user);
 
 }

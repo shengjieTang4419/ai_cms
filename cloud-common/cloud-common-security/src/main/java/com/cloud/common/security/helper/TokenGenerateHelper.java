@@ -20,7 +20,7 @@ public class TokenGenerateHelper {
     /**
      * 生成AccessToken
      */
-    public String generateAccessToken(String userKey, Integer userId, String username) {
+    public String generateAccessToken(String userKey, Long userId, String username) {
         Map<String, Object> claims = new HashMap<>();
         claims.put(SecurityConstants.USER_KEY, userKey);
         claims.put(SecurityConstants.DETAILS_USER_ID, userId);
@@ -32,7 +32,7 @@ public class TokenGenerateHelper {
     /**
      * 生成RefreshToken
      */
-    public String generateRefreshToken(String userKey, Integer userId, String username) {
+    public String generateRefreshToken(String userKey, Long userId, String username) {
         Map<String, Object> claims = new HashMap<>();
         claims.put(SecurityConstants.USER_KEY, userKey);
         claims.put(SecurityConstants.DETAILS_USER_ID, userId);
@@ -45,8 +45,8 @@ public class TokenGenerateHelper {
      * 构建Token响应
      */
     public Map<String, Object> buildTokenResponse(String accessToken, String refreshToken,
-                                                   DeviceType deviceType, long accessTokenExpire,
-                                                   long refreshTokenExpire) {
+                                                  DeviceType deviceType, long accessTokenExpire,
+                                                  long refreshTokenExpire) {
         Map<String, Object> result = new HashMap<>();
         result.put("access_token", accessToken);
         result.put("refresh_token", refreshToken);

@@ -28,7 +28,7 @@ import java.util.Map;
  * @date 2025/1/27
  */
 @RestController
-@RequestMapping("/api/images")
+@RequestMapping("/images")
 @RequiredArgsConstructor
 @Slf4j
 public class ImageController {

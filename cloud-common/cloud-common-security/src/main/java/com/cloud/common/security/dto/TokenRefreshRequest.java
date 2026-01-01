@@ -14,18 +14,18 @@ import java.util.Map;
 @Data
 @Builder
 public class TokenRefreshRequest {
-    
+
     private String userKey;
-    
-    private Integer userId;
-    
+
+    private Long userId;
+
     private String username;
-    
+
     private String deviceId;
-    
+
     private DeviceType deviceType;
-    
+
     private Map<String, Object> oldTokenInfo;
-    
+
     private String currentIp;
 }

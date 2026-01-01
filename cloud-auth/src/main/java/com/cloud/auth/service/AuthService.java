@@ -1,9 +1,9 @@
 package com.cloud.auth.service;
 
 import com.cloud.common.core.constant.CacheConstants;
+import com.cloud.common.core.constant.UserConstants;
 import com.cloud.common.core.domain.R;
 import com.cloud.common.core.exception.ServiceException;
-import com.cloud.common.core.text.Convert;
 import com.cloud.common.core.util.IpUtils;
 import com.cloud.common.core.util.JwtUtils;
 import com.cloud.common.core.util.StringUtils;
@@ -14,6 +14,7 @@ import com.cloud.system.api.feign.RemoteUserService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.redisson.api.RBucket;
+import org.redisson.api.RSet;
 import org.redisson.api.RedissonClient;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Service;
@@ -48,9 +49,12 @@ public class AuthService {
             String password = request.getPassword();
 
             // IP黑名单校验
-            String blackStr = Convert.toStr(redisson.getBucket(CacheConstants.SYS_LOGIN_BLACKIPLIST));
-            if (IpUtils.isMatchedIp(blackStr, IpUtils.getIpAddr())) {
-                throw new ServiceException("很遗憾，访问IP已被列入系统黑名单");
+            RSet<String> blackIpSet = redisson.getSet(CacheConstants.SYS_LOGIN_BLACKIPLIST);
+            if (blackIpSet != null && !blackIpSet.isEmpty()) {
+                String currentIp = IpUtils.getIpAddr();
+                if (blackIpSet.contains(currentIp)) {
+                    throw new ServiceException("很遗憾，访问IP已被列入系统黑名单");
+                }
             }
 
             R<LoginUser> loginUserR = remoteUserService.info(username);
@@ -81,6 +85,39 @@ public class AuthService {
             log.error("登录失败: {}", e.getMessage());
             throw new ServiceException("登录失败: " + e.getMessage());
         }
+    }
+
+    /**
+     * 注册
+     */
+    public LoginUser register(LoginUser loginUser) {
+        String email = loginUser.getEmail();
+        String password = loginUser.getPassword();
+        String userName = loginUser.getUserName();
+        // 用户名或密码为空 错误
+        if (StringUtils.isAnyBlank(userName, password)) {
+            throw new ServiceException("用户/密码必须填写");
+        }
+        if (userName.length() < UserConstants.USERNAME_MIN_LENGTH
+                || userName.length() > UserConstants.USERNAME_MAX_LENGTH) {
+            throw new ServiceException("账户长度必须在2到20个字符之间");
+        }
+        if (password.length() < UserConstants.PASSWORD_MIN_LENGTH
+                || password.length() > UserConstants.PASSWORD_MAX_LENGTH) {
+            throw new ServiceException("密码长度必须在5到20个字符之间");
+        }
+
+        // 注册用户信息
+        LoginUser sysUser = new LoginUser();
+        sysUser.setUserName(userName);
+        sysUser.setPassword(password);
+        sysUser.setEmail(email);
+        R<LoginUser> registerResult = remoteUserService.register(sysUser);
+
+        if (R.FAIL == registerResult.getCode()) {
+            throw new ServiceException(registerResult.getMsg());
+        }
+        return registerResult.getData();
     }
 
     /**

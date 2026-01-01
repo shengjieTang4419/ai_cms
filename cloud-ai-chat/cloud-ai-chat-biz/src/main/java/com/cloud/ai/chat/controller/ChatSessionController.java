@@ -18,7 +18,7 @@ import java.util.List;
  * @date 2025/9/24 21:57
  */
 @RestController
-@RequestMapping("/api/chat/sessions")
+@RequestMapping("/sessions")
 @RequiredArgsConstructor
 public class ChatSessionController {
 

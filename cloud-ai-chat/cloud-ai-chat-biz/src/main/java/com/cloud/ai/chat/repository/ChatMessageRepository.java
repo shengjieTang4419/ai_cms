@@ -31,4 +31,14 @@ public interface ChatMessageRepository extends MongoRepository<ChatMessage, Stri
      * 根据用户ID获取消息列表，按创建时间倒序
      */
     List<ChatMessage> findByUserIdOrderByCreatedAtDesc(Long userId);
+
+    /**
+     * 获取单个会话的消息列表
+     *
+     * @param sessionId
+     * @param dialogueId
+     * @param userId
+     * @return
+     */
+    List<ChatMessage> findBySessionIdAndDialogueIdAndUserId(String sessionId, String dialogueId, Long userId);
 }

@@ -28,6 +28,7 @@ import org.springframework.web.server.ServerWebExchange;
 import reactor.core.publisher.Mono;
 
 import java.nio.charset.StandardCharsets;
+import java.net.URLEncoder;
 import java.util.Map;
 
 /**
@@ -54,7 +55,6 @@ public class AuthFilter implements GlobalFilter, Ordered {
     public Mono<Void> filter(ServerWebExchange exchange, GatewayFilterChain chain) {
         ServerHttpRequest request = exchange.getRequest();
         ServerHttpResponse response = exchange.getResponse();
-
         String requestUri = request.getPath().value();
 
         // 检查是否在白名单中
@@ -141,13 +141,14 @@ public class AuthFilter implements GlobalFilter, Ordered {
             // 8. 构建新的请求，添加用户信息Header
             ServerHttpRequest modifiedRequest = exchange.getRequest().mutate()
                     .header(USER_ID_HEADER, userId)
-                    .header(USERNAME_HEADER, username)
+                    .header(USERNAME_HEADER, URLEncoder.encode(username, StandardCharsets.UTF_8))
                     .header(USER_KEY_HEADER, userKey)
                     // 清除内部请求来源参数
                     .headers(headers -> headers.remove(SecurityConstants.FROM_SOURCE))
                     .build();
 
             log.debug("Token验证成功，用户: {} ({})", username, userId);
+
             return chain.filter(exchange.mutate().request(modifiedRequest).response(response).build());
 
         } catch (Exception e) {

@@ -21,7 +21,7 @@ public class ServiceNameConstants {
     /**
      * 智能对话模块的serviceid
      */
-    public static final String AI_CHAT_SERVICE = "cloud-aiChat";
+    public static final String AI_CHAT_SERVICE = "cloud-ai-chat";
 
 
     /**

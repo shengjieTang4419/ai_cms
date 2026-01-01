@@ -5,9 +5,8 @@ import com.cloud.ai.chat.mcp.api.McpTool;
 import com.cloud.ai.chat.mcp.api.Schema;
 import com.cloud.ai.chat.provider.ModelProvider;
 import com.cloud.ai.chat.provider.ModelProviderManager;
-import com.cloud.common.core.response.Result;
+import com.cloud.common.core.util.StringUtils;
 import com.cloud.memebership.api.RemoteUserTagFeignService;
-import com.cloud.memebership.domain.UserTagDTO;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -82,9 +81,7 @@ public class PersonalizedRecommendationMcpTool implements McpTool {
     @Override
     public Object execute(JsonNode input) throws Exception {
         String query = input.get("query").asText();
-        Long userId = input.get("userId").asLong();
-
-        return suggestFollowUpTopics(query, userId);
+        return suggestFollowUpTopics(query);
     }
 
     @Override
@@ -105,35 +102,23 @@ public class PersonalizedRecommendationMcpTool implements McpTool {
      * 2. AIChatService直接调用（异步生成推荐）
      *
      * @param currentTopic 当前对话主题
-     * @param userId       用户ID
      * @return 推荐话题列表
      */
-    public List<String> suggestFollowUpTopics(String currentTopic, Long userId) {
-        log.info("推荐相关话题，userId={}, currentTopic={}", userId, currentTopic);
+    public List<String> suggestFollowUpTopics(String currentTopic) {
+        log.info("推荐相关话题，currentTopic={}", currentTopic);
 
         try {
-            // 获取用户热门标签
-            Result<List<UserTagDTO>> userHotTags = remoteUserTagFeignService.getUserHotTags(userId, 5);
-            List<UserTagDTO> userTags = userHotTags.getData();
-            if (userTags.isEmpty()) {
+            String suggestion = generateFollowUpSuggestionWithAI(currentTopic);
+            if (StringUtils.isEmpty(suggestion)) {
                 return new ArrayList<>();
             }
-
-            // 使用AI找到与当前话题相关的标签
-            List<UserTagDTO> relatedTags = findRelatedTagsWithAI(userTags, currentTopic);
-
-            if (relatedTags.isEmpty()) {
-                // 如果没有直接相关的，推荐用户最感兴趣的话题
-                relatedTags = userTags.stream().limit(3).toList();
-            }
-
-            List<String> suggestTopics = new ArrayList<>();
-            for (UserTagDTO tag : relatedTags) {
-                String suggestion = generateFollowUpSuggestionWithAI(tag.getTagName(), currentTopic);
-                suggestTopics.add(suggestion);
-            }
-
-            return suggestTopics;
+            
+            // 使用|||作为分隔符，更安全
+            return Arrays.stream(suggestion.split("\\|\\|\\|"))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .distinct()
+                    .collect(Collectors.toList());
         } catch (Exception e) {
             log.error("推荐相关话题失败", e);
             return new ArrayList<>();
@@ -141,80 +126,33 @@ public class PersonalizedRecommendationMcpTool implements McpTool {
     }
 
     /**
-     * 使用AI找到与当前话题相关的标签
-     */
-    private List<UserTagDTO> findRelatedTagsWithAI(List<UserTagDTO> userTags, String currentTopic) {
-        try {
-            String tagList = userTags.stream()
-                    .map(UserTagDTO::getTagName)
-                    .collect(Collectors.joining("、"));
-
-            String prompt = String.format("""
-                    请从以下用户兴趣标签中，找出与当前话题"%s"最相关的标签（最多3个）：
-                    
-                    用户兴趣标签：%s
-                    当前话题：%s
-                    
-                    要求：
-                    1. 基于语义相关性判断，不仅仅是关键词匹配
-                    2. 考虑标签与话题的关联程度
-                    3. 返回格式：标签1,标签2,标签3
-                    4. 如果没有相关标签，返回空字符串
-                    
-                    相关标签：
-                    """, currentTopic, tagList, currentTopic);
-
-            String response = getChatClient().prompt(prompt).call().content();
-
-            if (response == null || response.trim().isEmpty()) {
-                return new ArrayList<>();
-            }
-
-            // 解析AI返回的标签
-            String[] relatedTagNames = response.trim().split(",");
-            List<String> relatedTagNameList = Arrays.stream(relatedTagNames)
-                    .map(String::trim)
-                    .filter(name -> !name.isEmpty())
-                    .toList();
-
-            // 找到对应的UserTags对象
-            return userTags.stream()
-                    .filter(tag -> relatedTagNameList.contains(tag.getTagName()))
-                    .limit(3)
-                    .collect(Collectors.toList());
-
-        } catch (Exception e) {
-            log.error("AI查找相关标签失败，使用备用方案", e);
-            // 备用方案：返回权重最高的前3个标签
-            return userTags.stream().limit(3).collect(Collectors.toList());
-        }
-    }
-
-    /**
      * 使用AI生成后续建议
      */
-    private String generateFollowUpSuggestionWithAI(String tagName, String currentTopic) {
+    private String generateFollowUpSuggestionWithAI(String currentTopic) {
         try {
             String prompt = String.format("""
-                    基于用户当前话题"%s"和兴趣标签"%s"，生成一个自然的后续建议问题。
+                    基于用户当前话题"%s"，生成三个自然的后续建议问题。
                     
                     要求：
                     1. 问题要自然，像朋友间的对话
-                    2. 要体现标签与当前话题的关联
+                    2. 要体现与当前话题的关联
                     3. 问题长度控制在20-40个字
                     4. 直接返回问题，不要额外解释
+                    5. 话题与话题之间必须用|||做分割（三个竖线）
+                    6. 话题内容中不能包含|||符号
+                    7. 返回格式示例：问题1|||问题2|||问题3
                     
                     当前话题：%s
-                    兴趣标签：%s
                     生成的建议：
-                    """, currentTopic, tagName, currentTopic, tagName);
+                    """, currentTopic, currentTopic);
 
             String response = getChatClient().prompt(prompt).call().content();
-            return response != null ? response.trim() : "您是否想了解更多关于 " + tagName + " 的知识？";
+            assert response != null;
+            return response.trim();
 
         } catch (Exception e) {
             log.error("AI生成后续建议失败，使用默认建议", e);
-            return "您是否想了解更多关于 " + tagName + " 的知识？";
+            return null;
         }
     }
 }

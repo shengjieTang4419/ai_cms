@@ -40,8 +40,7 @@ public class RequestAdapter {
             return false;
         }
 
-        boolean matched = cachedDeviceId.equals(currentDeviceId);
-        return matched;
+        return cachedDeviceId.equals(currentDeviceId);
     }
 
     /**

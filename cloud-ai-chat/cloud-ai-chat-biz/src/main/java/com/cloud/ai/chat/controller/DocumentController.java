@@ -17,7 +17,7 @@ import org.springframework.web.multipart.MultipartFile;
  * @date 2025/9/29 13:41
  */
 @RestController
-@RequestMapping("/api/document")
+@RequestMapping("/document")
 @RequiredArgsConstructor
 @Slf4j
 public class DocumentController {

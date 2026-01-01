@@ -26,7 +26,7 @@ import java.util.Map;
  * @date 2025/01/16
  */
 @RestController
-@RequestMapping("/api/asr")
+@RequestMapping("/asr")
 @RequiredArgsConstructor
 @Slf4j
 @Tag(name = "语音识别", description = "语音转文字API")

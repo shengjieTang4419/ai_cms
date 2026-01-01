@@ -5,6 +5,7 @@ import com.alibaba.cloud.ai.dashscope.chat.DashScopeChatOptions;
 import com.cloud.ai.chat.domain.ChatContext;
 import com.cloud.ai.chat.domain.Image;
 import com.cloud.ai.chat.helper.ChatAnalysisHelper;
+import com.cloud.ai.chat.helper.ChatSuggestionHelper;
 import com.cloud.ai.chat.mcp.tools.office.PersonalizedRecommendationMcpTool;
 import com.cloud.ai.chat.provider.ModelProvider;
 import com.cloud.ai.chat.util.ModelSelector;
@@ -23,8 +24,6 @@ import org.springframework.util.StringUtils;
 import reactor.core.publisher.Flux;
 
 import java.util.List;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -44,12 +43,12 @@ public class AIChatService {
     private final ChatMessageService chatMessageService;
     private final PgVectorStore vectorStore;
     private final ChatAnalysisHelper chatAnalysisHelper;
-    private final PersonalizedRecommendationMcpTool recommendationTool;
     private final ImageService imageService;
+    private final PersonalizedRecommendationMcpTool personalizedRecommendationMcpTool;
+    private final ChatSuggestionHelper chatSuggestionHelper;
 
     @Value("${ai.guide:true}")
     private boolean aiGuide;
-
 
     /**
      * 根据聊天上下文获取ChatClient实例
@@ -72,18 +71,18 @@ public class AIChatService {
         return defaultProvider.getChatClient().prompt(query).call().content();
     }
 
-    public Flux<String> streamChat(String query, String sessionId, List<String> imageUrlList, Boolean isWithEnableSearch, Boolean isDeepThinking, String longitude, String latitude) {
-        return streamChat(query, sessionId, false, Boolean.TRUE.equals(isWithEnableSearch), query, imageUrlList, isDeepThinking, longitude, latitude);
+    public Flux<String> streamChat(String query, String sessionId, String dialogueId, List<String> imageUrlList, Boolean isWithEnableSearch, Boolean isDeepThinking, String longitude, String latitude) {
+        return streamChat(query, sessionId, dialogueId, false, Boolean.TRUE.equals(isWithEnableSearch), query, imageUrlList, isDeepThinking, longitude, latitude);
     }
 
-    public Flux<String> ragStreamChat(String query, String sessionId, List<String> imageUrlList, Boolean isWithEnableSearch, Boolean isDeepThinking, String longitude, String latitude) {
+    public Flux<String> ragStreamChat(String query, String sessionId, String dialogueId, List<String> imageUrlList, Boolean isWithEnableSearch, Boolean isDeepThinking, String longitude, String latitude) {
         boolean useThinking = Boolean.TRUE.equals(isDeepThinking);
         List<Document> relevantDocs = vectorStore.similaritySearch(query);
         if (CollectionUtils.isEmpty(relevantDocs)) {
-            return streamChat(query, sessionId, false, Boolean.TRUE.equals(isWithEnableSearch), query, imageUrlList, useThinking, longitude, latitude);
+            return streamChat(query, sessionId, dialogueId, false, Boolean.TRUE.equals(isWithEnableSearch), query, imageUrlList, useThinking, longitude, latitude);
         }
         String enhancedPrompt = buildRagPrompt(query, relevantDocs);
-        return streamChat(enhancedPrompt, sessionId, true, Boolean.TRUE.equals(isWithEnableSearch), query, imageUrlList, useThinking, longitude, latitude);
+        return streamChat(enhancedPrompt, sessionId, dialogueId, true, Boolean.TRUE.equals(isWithEnableSearch), query, imageUrlList, useThinking, longitude, latitude);
     }
 
     /**
@@ -91,6 +90,7 @@ public class AIChatService {
      *
      * @param query         增强后的查询（可能包含OCR文本）
      * @param sessionId     会话ID
+     * @param dialogueId    对话ID（关联USER、ASSISTANT、RECOMMENDATIONS）
      * @param isRagEnhanced 是否启用RAG增强
      * @param isWebSearch   是否启用全网搜索
      * @param originQuery   原始用户查询
@@ -100,7 +100,7 @@ public class AIChatService {
      * @param latitude      当前位置纬度（可选）
      * @return 响应流
      */
-    private Flux<String> streamChat(String query, String sessionId, boolean isRagEnhanced, boolean isWebSearch, String originQuery, List<String> imageList, boolean useThinking, String longitude, String latitude) {
+    private Flux<String> streamChat(String query, String sessionId, String dialogueId, boolean isRagEnhanced, boolean isWebSearch, String originQuery, List<String> imageList, boolean useThinking, String longitude, String latitude) {
         Long userId = SecurityUtils.getCurrentUserId();
 
         log.info("开始流式对话，userId: {}, sessionId: {}, query: {}, images: {}, rag={}, webSearch={}, deepThinking={}",
@@ -109,8 +109,10 @@ public class AIChatService {
         // 1. 处理会话初始化（在流开始前完成）
         initializeSessionIfNeeded(userId, sessionId, originQuery);
 
-        // 2. 异步生成个性化推荐（如果启用）
-        CompletableFuture<List<String>> recommendationsFuture = startRecommendationGeneration(userId, sessionId, originQuery);
+        //2.采用异步方式 预先生成话题引导
+        if (aiGuide) {
+            chatSuggestionHelper.asyncCreateSuggestion(query, sessionId, dialogueId, userId);
+        }
 
         // 3. 使用OCR结果增强查询
         String enhancedQuery = enhanceQueryWithOCR(query, imageList);
@@ -127,10 +129,10 @@ public class AIChatService {
             log.info("检测到位置信息，已添加到查询中: {}", context.getLocationCoordinate());
         }
         Flux<String> contentFlux = buildRequestStream(chatClient, finalQuery, sessionId, isWebSearch, useThinking);
-
-        // 6. 处理响应流：收集内容、追加推荐、保存消息
-        return processResponseStream(contentFlux, recommendationsFuture, userId, sessionId, originQuery, imageList, isRagEnhanced);
+        // 7. 处理响应流：收集内容、保存消息
+        return processResponseStream(contentFlux, userId, sessionId, dialogueId, originQuery, imageList, isRagEnhanced);
     }
+
 
     /**
      * 初始化会话（如果是新会话则创建标题）
@@ -144,25 +146,6 @@ public class AIChatService {
                 log.error("初始化会话失败，sessionId: {}", sessionId, e);
             }
         }
-    }
-
-    /**
-     * 启动个性化推荐生成（异步）
-     */
-    private CompletableFuture<List<String>> startRecommendationGeneration(Long userId, String sessionId, String originQuery) {
-        if (!aiGuide) {
-            return null;
-        }
-
-        log.debug("异步生成个性化推荐，userId: {}, sessionId: {}, query: {}", userId, sessionId, originQuery);
-        return CompletableFuture.supplyAsync(() -> {
-            try {
-                return recommendationTool.suggestFollowUpTopics(originQuery, userId);
-            } catch (Exception e) {
-                log.error("生成个性化推荐失败，userId: {}, sessionId: {}", userId, sessionId, e);
-                return null;
-            }
-        });
     }
 
     /**
@@ -241,8 +224,8 @@ public class AIChatService {
     /**
      * 处理响应流：收集内容、追加推荐、保存消息
      */
-    private Flux<String> processResponseStream(Flux<String> contentFlux, CompletableFuture<List<String>> recommendationsFuture,
-                                               Long userId, String sessionId, String originQuery,
+    private Flux<String> processResponseStream(Flux<String> contentFlux,
+                                               Long userId, String sessionId, String dialogueId, String originQuery,
                                                List<String> imageList, boolean isRagEnhanced) {
         StringBuilder fullResponse = new StringBuilder();
 
@@ -251,72 +234,29 @@ public class AIChatService {
                 .doOnNext(fullResponse::append)
                 .doOnError(error -> log.error("流式响应处理出错，userId: {}, sessionId: {}", userId, sessionId, error));
 
-        // 在主响应流完成后，追加推荐内容
-        // concatWith 会在主响应流完成后才订阅推荐流，Flux.defer 确保在订阅时才获取推荐内容
-        Flux<String> recommendationsFlux = Flux.defer(() -> {
-            try {
-                String recommendations = getRecommendationsSafely(recommendationsFuture);
-                if (StringUtils.hasText(recommendations)) {
-                    log.debug("个性化推荐已获取并追加，sessionId: {}", sessionId);
-                    return Flux.just(recommendations);
-                }
-            } catch (Exception e) {
-                log.warn("获取推荐内容失败，sessionId: {}", sessionId, e);
-            }
-            return Flux.empty();
-        });
-
         // 合并主响应流和推荐流（concatWith 确保主响应流完成后才订阅推荐流）
         return mainResponseFlux
-                .concatWith(recommendationsFlux)
                 .doOnComplete(() -> {
                     String completeResponse = fullResponse.toString();
-                    // 再次获取推荐内容以确保保存时包含推荐（防止异步获取延迟）
-                    String recommendations = getRecommendationsSafely(recommendationsFuture);
-                    if (StringUtils.hasText(recommendations)) {
-                        completeResponse += recommendations;
-                    }
-
                     // 保存消息
-                    saveMessages(userId, sessionId, originQuery, imageList, completeResponse, isRagEnhanced);
-
+                    saveMessages(userId, sessionId, dialogueId, originQuery, imageList, completeResponse, isRagEnhanced);
                     // 异步分析聊天内容并更新用户标签
-                    if (aiGuide) {
-                        analyzeChatContentAsync(userId, sessionId, originQuery, completeResponse);
-                    }
+                    //analyzeChatContentAsync(userId, sessionId, originQuery, completeResponse);
                 });
     }
 
     /**
-     * 安全获取推荐内容（带超时）
-     */
-    private String getRecommendationsSafely(CompletableFuture<List<String>> recommendationsFuture) {
-        if (recommendationsFuture == null || !aiGuide) {
-            return "";
-        }
-
-        try {
-            List<String> recommendationList = recommendationsFuture.get(500, TimeUnit.MILLISECONDS);
-            if (!CollectionUtils.isEmpty(recommendationList)) {
-                return formatRecommendations(recommendationList);
-            }
-        } catch (Exception e) {
-            log.debug("获取个性化推荐超时或失败: {}", e.getMessage());
-        }
-        return "";
-    }
-
-    /**
      * 保存用户消息和助手消息
+     * 使用前端传入的dialogueId关联一轮完整对话
      */
-    private void saveMessages(Long userId, String sessionId, String originQuery,
+    private void saveMessages(Long userId, String sessionId, String dialogueId, String originQuery,
                               List<String> imageList, String completeResponse, boolean isRagEnhanced) {
         try {
-            chatMessageService.saveUserMessage(sessionId, userId, originQuery, imageList);
-            chatMessageService.saveAssistantMessage(sessionId, userId, completeResponse, isRagEnhanced);
-            log.debug("消息已保存，sessionId: {}", sessionId);
+            chatMessageService.saveUserMessage(sessionId, dialogueId, userId, originQuery, imageList);
+            chatMessageService.saveAssistantMessage(sessionId, dialogueId, userId, completeResponse, isRagEnhanced);
+            log.debug("消息已保存，sessionId: {}, dialogueId: {}", sessionId, dialogueId);
         } catch (Exception e) {
-            log.error("保存消息失败，sessionId: {}", sessionId, e);
+            log.error("保存消息失败，sessionId: {}, dialogueId: {}", sessionId, dialogueId, e);
         }
     }
 
@@ -345,39 +285,6 @@ public class AIChatService {
 
         return enhancedQuery.toString();
     }
-
-    /**
-     * 格式化推荐内容，使其更加自然和友好
-     */
-    private String formatRecommendations(List<String> recommendations) {
-        if (CollectionUtils.isEmpty(recommendations)) {
-            return "";
-        }
-
-        // 取前3个推荐（如果有的话）
-        int count = Math.min(recommendations.size(), 3);
-        List<String> topRecommendations = recommendations.subList(0, count);
-
-        StringBuilder result = new StringBuilder("\n\n要不我们聊点其他的？");
-
-        for (int i = 0; i < topRecommendations.size(); i++) {
-            String item = topRecommendations.get(i).trim();
-
-            if (i == 0) {
-                // 第一个：比如...
-                result.append("比如").append(item).append("？");
-            } else if (i == topRecommendations.size() - 1) {
-                // 最后一个：或者...
-                result.append("或者").append(item).append("？");
-            } else {
-                // 中间的：、...
-                result.append("、").append(item);
-            }
-        }
-
-        return result.toString();
-    }
-
 
     private String buildRagPrompt(String userQuery, List<Document> docs) {
         if (docs.isEmpty()) {
@@ -408,7 +315,6 @@ public class AIChatService {
         try {
             // 合并用户问题和AI回答作为分析内容
             String combinedContent = String.format("用户问题：%s\nAI回答：%s", userQuery, assistantResponse);
-
             // 分析聊天内容并更新标签
             chatAnalysisHelper.analyzeChatSession(userId, sessionId, combinedContent);
 

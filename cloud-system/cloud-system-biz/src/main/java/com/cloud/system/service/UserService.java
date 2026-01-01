@@ -1,21 +1,22 @@
 package com.cloud.system.service;
 
 
-import com.cloud.common.security.dto.CustomerUserDetail;
+import com.cloud.common.core.util.SpringUtils;
+import com.cloud.common.core.util.StringUtils;
+import com.cloud.system.api.dto.LoginUser;
 import com.cloud.system.domain.User;
 import com.cloud.system.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 /**
  * 用户服务 - 纯业务逻辑，不实现安全接口
+ *
  * @author shengjie.tang
  * @version 1.0.0
  * @description: 用户业务服务
@@ -27,6 +28,23 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
+
+    public User register(LoginUser user) {
+        String username = user.getUserName();
+        String email = user.getEmail();
+        //数据合法性校验，应该在Controller层 这里其实指的是AuthController
+        if (StringUtils.isAnyBlank(username, email)) {
+            throw new RuntimeException("用户名和邮箱不能为空！");
+        }
+        if (findByUsernameOrEmail(username, email).isPresent()) {
+            throw new RuntimeException("用户名称或者邮箱已存在！");
+        }
+        User saveUser = new User();
+        saveUser.setUsername(username);
+        saveUser.setEmail(email);
+        saveUser.setPassword(user.getPassword());
+        return SpringUtils.getAopProxy(this).save(saveUser);
+    }
 
     public User save(User user) {
         if (user.getPassword() != null) {
@@ -44,7 +62,6 @@ public class UserService {
     /**
      * 根据用户名查找用户
      */
-    @Transactional(readOnly = true)
     public Optional<User> findByUsername(String username) {
         return userRepository.findByUsername(username);
     }
@@ -52,7 +69,6 @@ public class UserService {
     /**
      * 根据用户名或邮箱查找用户
      */
-    @Transactional(readOnly = true)
     public Optional<User> findByUsernameOrEmail(String username, String email) {
         return userRepository.findByUsernameOrEmail(username, email);
     }
@@ -60,7 +76,6 @@ public class UserService {
     /**
      * 根据邮箱查找用户
      */
-    @Transactional(readOnly = true)
     public Optional<User> findByEmail(String email) {
         return userRepository.findByEmail(email);
     }

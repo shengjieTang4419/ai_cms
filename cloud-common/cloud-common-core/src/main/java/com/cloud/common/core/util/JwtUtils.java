@@ -5,8 +5,9 @@ import com.cloud.common.core.constant.TokenConstants;
 import com.cloud.common.core.text.Convert;
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.security.Keys;
 
+import javax.crypto.SecretKey;
 import java.util.Map;
 
 /**
@@ -15,8 +16,8 @@ import java.util.Map;
  * @author shengjie.tag
  */
 public class JwtUtils {
-    public static String secret = TokenConstants.SECRET;
-    public static String refreshSecret = TokenConstants.REFRESH_SECRET;
+    private static final SecretKey secret = Keys.hmacShaKeyFor(TokenConstants.SECRET.getBytes());
+    private static final SecretKey refreshSecret = Keys.hmacShaKeyFor(TokenConstants.REFRESH_SECRET.getBytes());
 
 
     /**
@@ -26,11 +27,11 @@ public class JwtUtils {
      * @return 令牌
      */
     public static String createToken(Map<String, Object> claims) {
-        return Jwts.builder().setClaims(claims).signWith(SignatureAlgorithm.HS512, secret).compact();
+        return Jwts.builder().setClaims(claims).signWith(secret).compact();
     }
 
     public static String createRefreshToken(Map<String, Object> claims) {
-        return Jwts.builder().setClaims(claims).signWith(SignatureAlgorithm.HS512, refreshSecret).compact();
+        return Jwts.builder().setClaims(claims).signWith(refreshSecret).compact();
     }
 
     /**
@@ -40,11 +41,11 @@ public class JwtUtils {
      * @return 数据声明
      */
     public static Claims parseToken(String token) {
-        return Jwts.parser().setSigningKey(secret).parseClaimsJws(token).getBody();
+        return Jwts.parser().verifyWith(secret).build().parseSignedClaims(token).getPayload();
     }
 
     public static Claims parseRefreshToken(String token) {
-        return Jwts.parser().setSigningKey(refreshSecret).parseClaimsJws(token).getBody();
+        return Jwts.parser().verifyWith(refreshSecret).build().parseSignedClaims(token).getPayload();
     }
 
     /**
@@ -129,7 +130,7 @@ public class JwtUtils {
      */
     public static boolean validateJwtToken(String token) {
         try {
-            Jwts.parser().setSigningKey(secret).parseClaimsJws(token);
+            Jwts.parser().verifyWith(secret).build().parseSignedClaims(token);
             return true;
         } catch (Exception e) {
             return false;

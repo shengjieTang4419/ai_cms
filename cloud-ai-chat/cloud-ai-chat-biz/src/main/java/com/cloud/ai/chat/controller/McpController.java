@@ -20,7 +20,7 @@ import java.util.Map;
  * @date 2025/11/16
  */
 @RestController
-@RequestMapping("/api/mcp")
+@RequestMapping("/mcp")
 @RequiredArgsConstructor
 @Slf4j
 public class McpController {

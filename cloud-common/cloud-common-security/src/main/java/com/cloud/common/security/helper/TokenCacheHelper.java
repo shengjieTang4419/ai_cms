@@ -39,7 +39,7 @@ public class TokenCacheHelper {
     /**
      * 缓存AccessToken信息
      */
-    public void cacheAccessToken(String userKey, String accessToken, Integer userId, String username,
+    public void cacheAccessToken(String userKey, String accessToken, Long userId, String username,
                                  String deviceId, DeviceType deviceType, String ipAddr, long accessTokenExpire) {
         Map<String, Object> accessInfo = new HashMap<>();
         accessInfo.put("accessToken", accessToken);
@@ -50,7 +50,7 @@ public class TokenCacheHelper {
     }
 
 
-    private void buildOtherAttrs(Map<String, Object> tokenMap, String userKey, Integer userId, String username,
+    private void buildOtherAttrs(Map<String, Object> tokenMap, String userKey, Long userId, String username,
                                  String deviceId, DeviceType deviceType) {
         tokenMap.put("userKey", userKey);
         tokenMap.put("userId", userId);
@@ -63,7 +63,7 @@ public class TokenCacheHelper {
     /**
      * 缓存RefreshToken信息
      */
-    public void cacheRefreshToken(String userKey, String refreshToken, Integer userId, String username,
+    public void cacheRefreshToken(String userKey, String refreshToken, Long userId, String username,
                                   String deviceId, DeviceType deviceType, String ipAddr, long refreshTokenExpire) {
         Map<String, Object> refreshInfo = new HashMap<>();
         refreshInfo.put("refreshToken", refreshToken);

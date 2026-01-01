@@ -11,18 +11,19 @@ import com.cloud.common.core.util.JwtUtils;
 import com.cloud.common.core.util.StringUtils;
 import com.cloud.common.core.uuid.IdUtils;
 import com.cloud.common.security.dto.TokenRefreshRequest;
+import com.cloud.common.security.helper.DeviceSecurityHelper;
 import com.cloud.common.security.helper.TokenCacheHelper;
 import com.cloud.common.security.helper.TokenGenerateHelper;
 import com.cloud.common.security.strategy.TokenRefreshStrategy;
 import com.cloud.system.api.dto.LoginUser;
 import io.jsonwebtoken.Claims;
+import jakarta.servlet.http.HttpServletRequest;
 import lombok.RequiredArgsConstructor;
 import org.redisson.api.RBucket;
 import org.redisson.api.RedissonClient;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.stereotype.Component;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -56,30 +57,34 @@ public class TokenService {
         long accessTokenExpire = TokenStrategy.getAccessTokenExpire(deviceType);
         long refreshTokenExpire = TokenStrategy.getRefreshTokenExpire(deviceType);
         String userKey = IdUtils.fastUUID();
-        Integer userId = loginUser.getUserId();
+        Long userId = loginUser.getUserId();
         String userName = loginUser.getUserName();
         String ipAddr = IpUtils.getIpAddr();
 
         // 使用Helper生成Token
         String accessToken = tokenGenerateHelper.generateAccessToken(userKey, userId, userName);
         String refreshToken = tokenGenerateHelper.generateRefreshToken(userKey, userId, userName);
-
         // 使用Helper缓存Token
-        tokenCacheHelper.cacheAccessToken(userKey, accessToken, userId, userName, 
-            deviceId, deviceType, ipAddr, accessTokenExpire);
-        tokenCacheHelper.cacheRefreshToken(userKey, refreshToken, userId, userName, 
-            deviceId, deviceType, ipAddr, refreshTokenExpire);
+        tokenCacheHelper.cacheAccessToken(userKey, accessToken, userId, userName,
+                deviceId, deviceType, ipAddr, accessTokenExpire);
+        tokenCacheHelper.cacheRefreshToken(userKey, refreshToken, userId, userName,
+                deviceId, deviceType, ipAddr, refreshTokenExpire);
 
         // 使用Helper构建响应
-        return tokenGenerateHelper.buildTokenResponse(accessToken, refreshToken, 
-            deviceType, accessTokenExpire, refreshTokenExpire);
+        return tokenGenerateHelper.buildTokenResponse(accessToken, refreshToken,
+                deviceType, accessTokenExpire, refreshTokenExpire);
     }
 
     /**
-     * 刷新Token（策略模式）
+     * 刷新Token（策略模式，增强设备安全校验）
      */
-    public Map<String, Object> refreshToken(String refreshToken, String currentDeviceId) {
+    public Map<String, Object> refreshToken(String refreshToken, String currentDeviceId, HttpServletRequest request) {
         try {
+            // 0. 可疑请求检查（额外安全层）
+            if (DeviceSecurityHelper.isSuspiciousRequest(request)) {
+                throw new BadCredentialsException("检测到可疑请求，拒绝访问");
+            }
+
             // 1. JWT基础验证
             Claims claims = JwtUtils.parseRefreshToken(refreshToken);
             if (claims == null || !SecurityConstants.REFRESH_TOKEN_TYPE.equals(claims.get(SecurityConstants.TOKEN_TYPE))) {
@@ -88,7 +93,7 @@ public class TokenService {
 
             // 2. 提取关键信息
             String userKey = (String) claims.get(SecurityConstants.USER_KEY);
-            Integer userId = (Integer) claims.get(SecurityConstants.DETAILS_USER_ID);
+            Long userId = (Long) claims.get(SecurityConstants.DETAILS_USER_ID);
             String username = (String) claims.get(SecurityConstants.DETAILS_USERNAME);
             Long issuedAt = claims.getIssuedAt().getTime();
 
@@ -118,14 +123,14 @@ public class TokenService {
                 throw new BadCredentialsException("RefreshToken信息不匹配");
             }
 
-            // 7. 设备信息验证
+            // 7. 严格设备信息验证（使用设备指纹校验）
             String cachedDeviceId = (String) refreshTokenInfo.get("deviceId");
-            if (isDeviceChanged(cachedDeviceId, currentDeviceId)) {
+            if (!DeviceSecurityHelper.isDeviceMatchStrict(cachedDeviceId, request)) {
                 throw new BadCredentialsException("检测到设备变化，请重新登录");
             }
 
             // 8. 构建刷新请求参数
-            TokenRefreshRequest request = TokenRefreshRequest.builder()
+            TokenRefreshRequest tokenRequest = TokenRefreshRequest.builder()
                     .userKey(userKey)
                     .userId(userId)
                     .username(username)
@@ -137,13 +142,12 @@ public class TokenService {
 
             // 9. 使用策略模式刷新Token
             TokenRefreshStrategy strategy = getRefreshStrategy(deviceType);
-            return strategy.refreshToken(request);
+            return strategy.refreshToken(tokenRequest);
 
         } catch (Exception e) {
             throw new ServiceException("刷新Token失败: " + e.getMessage());
         }
     }
-
 
     /**
      * 获取刷新策略
@@ -156,12 +160,14 @@ public class TokenService {
     }
 
     /**
-     * 验证设备信息是否发生变化
+     * 验证设备信息是否发生变化（已废弃，使用DeviceSecurityHelper替代）
      *
      * @param cachedDeviceId  缓存中的设备ID
      * @param currentDeviceId 当前设备ID
      * @return true表示设备未变化，false表示设备已变化
+     * @deprecated 使用 {@link DeviceSecurityHelper#isDeviceMatchStrict(String, HttpServletRequest)} 替代
      */
+    @Deprecated
     private boolean isDeviceChanged(String cachedDeviceId, String currentDeviceId) {
         // 如果都没有设备信息，认为未变化
         if (StringUtils.isEmpty(cachedDeviceId) && StringUtils.isEmpty(currentDeviceId)) {

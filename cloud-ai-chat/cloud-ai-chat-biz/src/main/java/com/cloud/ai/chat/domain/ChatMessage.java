@@ -28,6 +28,9 @@ public class ChatMessage {
     @Field("session_id")
     private String sessionId;
 
+    @Field("dialogue_id")
+    private String dialogueId;
+
     @Field("user_id")
     private Long userId;
 
@@ -52,7 +55,7 @@ public class ChatMessage {
     private List<String> imageUrls;
 
     public enum MessageType {
-        USER, ASSISTANT
+        USER, ASSISTANT, RECOMMENDATIONS
     }
 
     public ChatMessage() {
@@ -67,8 +70,18 @@ public class ChatMessage {
         this.content = content;
     }
 
+    public ChatMessage(String sessionId, String dialogueId, Long userId, MessageType messageType, String content) {
+        this(sessionId, userId, messageType, content);
+        this.dialogueId = dialogueId;
+    }
+
     public ChatMessage(String sessionId, Long userId, MessageType messageType, String content, Boolean isRagEnhanced) {
         this(sessionId, userId, messageType, content);
+        this.isRagEnhanced = isRagEnhanced;
+    }
+
+    public ChatMessage(String sessionId, String dialogueId, Long userId, MessageType messageType, String content, Boolean isRagEnhanced) {
+        this(sessionId, dialogueId, userId, messageType, content);
         this.isRagEnhanced = isRagEnhanced;
     }
 
@@ -77,8 +90,18 @@ public class ChatMessage {
         this.imageUrls = imageUrls;
     }
 
+    public ChatMessage(String sessionId, String dialogueId, Long userId, MessageType messageType, String content, List<String> imageUrls) {
+        this(sessionId, dialogueId, userId, messageType, content);
+        this.imageUrls = imageUrls;
+    }
+
     public ChatMessage(String sessionId, Long userId, MessageType messageType, String content, Boolean isRagEnhanced, List<String> imageUrls) {
         this(sessionId, userId, messageType, content, isRagEnhanced);
+        this.imageUrls = imageUrls;
+    }
+
+    public ChatMessage(String sessionId, String dialogueId, Long userId, MessageType messageType, String content, Boolean isRagEnhanced, List<String> imageUrls) {
+        this(sessionId, dialogueId, userId, messageType, content, isRagEnhanced);
         this.imageUrls = imageUrls;
     }
 }

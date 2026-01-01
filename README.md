@@ -1285,7 +1285,7 @@ curl "http://localhost:18080/api/profile/1" \
 **获取首页推荐**：
 
 ```bash
-curl "http://localhost:18080/api/recommendations/personalized/1?limit=5" \
+curl "http://localhost:18080/api/recommendations/personalized?limit=5" \
   -H "Authorization: Bearer YOUR_JWT_TOKEN"
 ```
 

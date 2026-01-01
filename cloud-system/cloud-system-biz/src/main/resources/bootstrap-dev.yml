@@ -4,8 +4,6 @@ spring:
     nacos:
       discovery:
         server-addr: 127.0.0.1:8848
-        namespace: 846f2e25-ebe9-4b44-a6eb-640bd59ee4c1
       config:
         server-addr: 127.0.0.1:8848
-        namespace: 846f2e25-ebe9-4b44-a6eb-640bd59ee4c1
 
