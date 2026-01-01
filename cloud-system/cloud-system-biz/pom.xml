@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+
+    <parent>
+        <groupId>com.cloud</groupId>
+        <artifactId>cloud-system</artifactId>
+        <version>${revision}</version>
+    </parent>
+
+    <modelVersion>4.0.0</modelVersion>
+    <artifactId>cloud-system-biz</artifactId>
+    <description>系统管理服务实现</description>
+
+    <dependencies>
+        <!-- cloud-system-api -->
+        <dependency>
+            <groupId>com.cloud</groupId>
+            <artifactId>cloud-system-api</artifactId>
+            <version>${revision}</version>
+        </dependency>
+
+        <!-- Spring Boot Web -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+
+        <!-- Nacos服务发现 -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-discovery</artifactId>
+        </dependency>
+
+        <!-- Nacos配置中心 -->
+        <dependency>
+            <groupId>com.alibaba.cloud</groupId>
+            <artifactId>spring-cloud-starter-alibaba-nacos-config</artifactId>
+        </dependency>
+
+        <!-- Bootstrap -->
+        <dependency>
+            <groupId>org.springframework.cloud</groupId>
+            <artifactId>spring-cloud-starter-bootstrap</artifactId>
+        </dependency>
+
+        <!-- cloud-common-security -->
+        <dependency>
+            <groupId>com.cloud</groupId>
+            <artifactId>cloud-common-security</artifactId>
+            <version>${revision}</version>
+        </dependency>
+
+        <!-- cloud-common-datasource -->
+        <dependency>
+            <groupId>com.cloud</groupId>
+            <artifactId>cloud-common-datasource</artifactId>
+            <version>${revision}</version>
+        </dependency>
+
+        <!-- cloud-common-redis -->
+        <dependency>
+            <groupId>com.cloud</groupId>
+            <artifactId>cloud-common-redis</artifactId>
+            <version>${revision}</version>
+        </dependency>
+    </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <mainClass>com.cloud.system.SystemApplication</mainClass>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
+
+</project>

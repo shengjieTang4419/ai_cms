@@ -789,22 +789,29 @@ public ChatClient chatClient(ChatClient.Builder builder) {
 
 #### 15.1 架构特点
 
-- **无状态认证**：用户信息存储在 JWT 中
-- **条件化加载**：System 模块完整认证，Chat 模块简化认证
-- **跨模块共享**：统一的 JWT Token
+- **无状态认证**：认证信息存储在 JWT 中
+- **统一入口**：cloud-auth 对外提供统一登录入口（/auth/login），内部通过 Feign 转发到 cloud-system 完成认证
+- **权限内置**：JWT 内写入 userId + authorities（角色/权限），各服务无需每次请求查库即可完成鉴权
+- **跨模块共享**：统一的 JWT Token，所有微服务复用 cloud-common-security 的过滤器链
 
 #### 15.2 工作流程
 
-**System 模块**（完整认证）：
+**登录（统一入口）**：
 ```
-用户登录 → 验证密码 → 生成 JWT（含 userId）
+客户端 → cloud-auth:/auth/login
     ↓
-请求带 Token → 验证签名 → 查询数据库 → 加载完整权限
+cloud-auth → Feign 转发 → cloud-system:/api/auth/login
+    ↓
+cloud-system 校验用户名密码 → 生成 JWT（含 userId + authorities）→ 返回给客户端
 ```
 
-**Chat 模块**（轻量认证）：
+**资源访问（各业务服务通用）**：
 ```
-请求带 Token → 验证签名 → 直接解析 userId/username
+请求带 Token → AuthTokenFilter 验证签名
+    ↓
+从 JWT 解析 userId/username/authorities → 构建 Authentication
+    ↓
+Spring Security 基于 authorities 执行 URL 鉴权 / @PreAuthorize
 ```
 
 详细架构请参考：[SECURITY-ARCHITECTURE.md](./SECURITY-ARCHITECTURE.md)

@@ -15,11 +15,11 @@
     <packaging>pom</packaging>
 
     <modules>
-        <module>cloud-common-datasource</module>
         <module>cloud-common-core</module>
-        <module>cloud-common-mongoDB</module>
-        <module>cloud-common-redis</module>
         <module>cloud-common-security</module>
+        <module>cloud-common-datasource</module>
+        <module>cloud-common-redis</module>
+        <module>cloud-common-mongoDB</module>
     </modules>
 
     <description>
