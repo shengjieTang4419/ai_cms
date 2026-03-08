@@ -30,7 +30,7 @@ public class ChatSuggestionHelper {
      * @param dialogueId 对话ID
      * @param userId     用户ID
      */
-    @Async
+    @Async("chatTaskExecutor")
     public void asyncCreateSuggestion(String query, String sessionId, String dialogueId, Long userId) {
         try {
             List<String> suggestFollowUpTopics = personalizedRecommendationMcpTool.suggestFollowUpTopics(query);

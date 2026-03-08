@@ -12,10 +12,10 @@ import com.alibaba.dashscope.exception.InputRequiredException;
 import com.alibaba.dashscope.exception.NoApiKeyException;
 import com.cloud.ai.chat.domain.ChatContext;
 import com.cloud.ai.chat.domain.Image;
-import com.cloud.ai.chat.helper.ChatAnalysisHelper;
 import com.cloud.ai.chat.helper.ChatSuggestionHelper;
 import com.cloud.ai.chat.provider.ModelProvider;
 import com.cloud.ai.chat.util.ModelSelector;
+import com.cloud.ai.chat.util.PromptLoader;
 import com.cloud.common.security.SecurityUtils;
 import io.reactivex.Flowable;
 import lombok.RequiredArgsConstructor;
@@ -25,7 +25,6 @@ import org.springframework.ai.chat.memory.ChatMemory;
 import org.springframework.ai.document.Document;
 import org.springframework.ai.vectorstore.pgvector.PgVectorStore;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
@@ -33,6 +32,7 @@ import reactor.core.publisher.Flux;
 import reactor.core.scheduler.Schedulers;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -52,11 +52,11 @@ public class AIChatService {
     private final ChatDialogueService chatDialogueService;
     private final ChatMessageService chatMessageService;
     private final PgVectorStore vectorStore;
-    private final ChatAnalysisHelper chatAnalysisHelper;
     private final ImageService imageService;
     private final ChatSuggestionHelper chatSuggestionHelper;
     private final ChatMemory chatMemory;
-
+    private final AiChatAnalysisService aiChatAnalysisService;
+    private final PromptLoader promptLoader;
     @Value("${ai.guide:true}")
     private boolean aiGuide;
 
@@ -80,8 +80,41 @@ public class AIChatService {
     }
 
     public String simpleChat(String query) {
-        ModelProvider defaultProvider = modelSelector.getProvider("qwen-turbo");
-        return defaultProvider.getChatClient().prompt(query).call().content();
+        ModelProvider defaultProvider = modelSelector.getDefaultPeriod();
+        return defaultProvider.simpleCall(query);
+    }
+
+    public Flux<String> streamChat(ChatContext context) {
+        if (context == null) {
+            throw new IllegalArgumentException("context must not be null");
+        }
+        String query = context.getQuery();
+        String sessionId = context.getSessionId();
+        String dialogueId = context.getDialogueId();
+        String originQuery = StringUtils.hasText(context.getOriginQuery()) ? context.getOriginQuery() : query;
+        return streamChat(query, sessionId, dialogueId, false, context.isWithEnableSearch(), originQuery,
+                context.getImageUrls(), context.isUseThinking(), context.getLongitude(), context.getLatitude());
+    }
+
+    public Flux<String> ragStreamChat(ChatContext context) {
+        if (context == null) {
+            throw new IllegalArgumentException("context must not be null");
+        }
+        String query = context.getQuery();
+        String sessionId = context.getSessionId();
+        String dialogueId = context.getDialogueId();
+
+        List<Document> relevantDocs = vectorStore.similaritySearch(query);
+        if (CollectionUtils.isEmpty(relevantDocs)) {
+            String originQuery = StringUtils.hasText(context.getOriginQuery()) ? context.getOriginQuery() : query;
+            return streamChat(query, sessionId, dialogueId, false, context.isWithEnableSearch(), originQuery,
+                    context.getImageUrls(), context.isUseThinking(), context.getLongitude(), context.getLatitude());
+        }
+
+        String enhancedPrompt = buildRagPrompt(query, relevantDocs);
+        String originQuery = StringUtils.hasText(context.getOriginQuery()) ? context.getOriginQuery() : query;
+        return streamChat(enhancedPrompt, sessionId, dialogueId, true, context.isWithEnableSearch(), originQuery,
+                context.getImageUrls(), context.isUseThinking(), context.getLongitude(), context.getLatitude());
     }
 
     public Flux<String> streamChat(String query, String sessionId, String dialogueId, List<String> imageUrlList, Boolean isWithEnableSearch, Boolean isDeepThinking, String longitude, String latitude) {
@@ -131,7 +164,7 @@ public class AIChatService {
         String enhancedQuery = enhanceQueryWithOCR(query, imageList);
 
         // 4. 构建聊天上下文并获取ChatClient
-        ChatContext context = buildChatContext(enhancedQuery, sessionId, isRagEnhanced, isWebSearch, originQuery, imageList, userId, useThinking, longitude, latitude);
+        ChatContext context = buildChatContext(enhancedQuery, sessionId, isRagEnhanced, isWebSearch, originQuery, imageList, userId, useThinking, longitude, latitude, dialogueId);
         ChatClient chatClient = getChatClient(context);
 
         // 5. 构建并执行请求流（如果有location信息，将其添加到prompt中）
@@ -165,8 +198,9 @@ public class AIChatService {
      * 构建聊天上下文
      */
     private ChatContext buildChatContext(String enhancedQuery, String sessionId, boolean isRagEnhanced,
-                                         boolean isWebSearch, String originQuery, List<String> imageList, Long userId, boolean useThinking, String longitude, String latitude) {
+                                         boolean isWebSearch, String originQuery, List<String> imageList, Long userId, boolean useThinking, String longitude, String latitude, String dialogueId) {
         return ChatContext.builder().query(enhancedQuery).sessionId(sessionId)
+                .dialogueId(dialogueId)
                 .ragEnhanced(isRagEnhanced).withEnableSearch(isWebSearch).originQuery(originQuery)
                 .imageUrls(imageList).userId(userId).useThinking(useThinking)
                 .longitude(longitude).latitude(latitude).build();
@@ -182,33 +216,34 @@ public class AIChatService {
      * @param isThinking    是否是Thinking模型（需要输出推理过程）
      */
     private Flux<String> buildRequestStream(ChatClient chatClient, String enhancedQuery, String sessionId, boolean isWebSearch, boolean isThinking) {
-        // 如果启用思考模型，直接使用DashScope SDK来获取完整的思考过程
         if (isThinking) {
-            log.info("为本次请求启用DashScope思考模型功能，sessionId: {}", sessionId);
-            // 获取优先级最高的支持Thinking的模型
-            ModelProvider thinkingProvider = modelSelector.getProviderManager().getThinkingProvider();
-            String modelName = thinkingProvider.getModelName();
-            log.info("使用Thinking模型: {} ({})", thinkingProvider.getDisplayName(), modelName);
-            return buildThinkingStreamWithDashScope(enhancedQuery, sessionId, modelName, isWebSearch);
+            return buildThinkingRequestStream(enhancedQuery, sessionId, isWebSearch);
         }
+        return buildStandardRequestStream(chatClient, enhancedQuery, sessionId, isWebSearch);
+    }
 
-        // 非思考模型，使用Spring AI的ChatClient
+    private Flux<String> buildThinkingRequestStream(String enhancedQuery, String sessionId, boolean isWebSearch) {
+        log.info("为本次请求启用DashScope思考模型功能，sessionId: {}", sessionId);
+        ModelProvider thinkingProvider = modelSelector.getProviderManager().getThinkingProvider();
+        String modelName = thinkingProvider.getModelName();
+        log.info("使用Thinking模型: {} ({})", thinkingProvider.getDisplayName(), modelName);
+        return buildThinkingStreamWithDashScope(enhancedQuery, sessionId, modelName, isWebSearch);
+    }
+
+    private Flux<String> buildStandardRequestStream(ChatClient chatClient, String enhancedQuery, String sessionId, boolean isWebSearch) {
         var promptBuilder = chatClient.prompt(enhancedQuery)
                 .advisors(a -> a.param(ChatMemory.CONVERSATION_ID, sessionId));
+        DashScopeChatOptions requestOptions = buildDashScopeRequestOptions(sessionId, isWebSearch);
+        return promptBuilder.options(requestOptions).stream().content();
+    }
 
-        // 构建请求选项
+    private DashScopeChatOptions buildDashScopeRequestOptions(String sessionId, boolean isWebSearch) {
         var optionsBuilder = DashScopeChatOptions.builder();
-
-        // 当启用全网搜索时，设置enableSearch选项
         if (isWebSearch) {
             optionsBuilder.withEnableSearch(true);
             log.info("为本次请求启用DashScope全网搜索功能，sessionId: {}", sessionId);
         }
-
-        DashScopeChatOptions requestOptions = optionsBuilder.build();
-        promptBuilder = promptBuilder.options(requestOptions);
-
-        return promptBuilder.stream().content();
+        return optionsBuilder.build();
     }
 
     /**
@@ -218,9 +253,9 @@ public class AIChatService {
      * [THINKING_START]思考过程内容[THINKING_END]
      * [ANSWER_START]最终回答内容[ANSWER_END]
      *
-     * @param userQuery 用户查询
-     * @param sessionId 会话ID
-     * @param modelName 模型名称
+     * @param userQuery    用户查询
+     * @param sessionId    会话ID
+     * @param modelName    模型名称
      * @param enableSearch 是否启用全网搜索
      * @return 包含思考过程和最终回复的流
      */
@@ -356,7 +391,7 @@ public class AIChatService {
                     // 保存消息
                     saveMessages(userId, sessionId, dialogueId, originQuery, imageList, completeResponse, isRagEnhanced);
                     // 异步分析聊天内容并更新用户标签
-                    analyzeChatContentAsync(userId, sessionId, originQuery, completeResponse);
+                    aiChatAnalysisService.analysis(userId, originQuery, sessionId, dialogueId);
                 });
     }
 
@@ -408,34 +443,8 @@ public class AIChatService {
         String context = docs.stream()
                 .map(Document::getText)
                 .collect(Collectors.joining("\n\n"));
-
-        return String.format("""
-                基于以下参考文档回答用户问题。如果文档中没有相关信息，请基于你的知识回答，并说明信息来源。
-                
-                参考文档：
-                %s
-                
-                用户问题：%s
-                
-                请提供准确、有用的回答：
-                """, context, userQuery);
+        return promptLoader.loadPromptAndFormat("prompts/rag-prompt.txt", context, userQuery);
     }
 
 
-    /**
-     * 异步分析聊天内容并更新用户标签
-     */
-    @Async
-    public void analyzeChatContentAsync(Long userId, String sessionId, String userQuery, String assistantResponse) {
-        try {
-            // 合并用户问题和AI回答作为分析内容
-            String combinedContent = String.format("用户问题：%s\nAI回答：%s", userQuery, assistantResponse);
-            // 分析聊天内容并更新标签
-            chatAnalysisHelper.analyzeChatSession(userId, sessionId, combinedContent);
-
-            log.info("聊天内容分析完成，userId: {}, sessionId: {}", userId, sessionId);
-        } catch (Exception e) {
-            log.error("聊天内容分析失败，userId: {}, sessionId: {}", userId, sessionId, e);
-        }
-    }
 }

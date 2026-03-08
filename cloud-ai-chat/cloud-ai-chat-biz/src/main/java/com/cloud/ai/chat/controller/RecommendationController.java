@@ -5,7 +5,6 @@ import com.cloud.ai.chat.domain.UserTags;
 import com.cloud.ai.chat.service.impl.ChatMessageService;
 import com.cloud.ai.chat.service.impl.RecommendationService;
 import com.cloud.ai.chat.service.impl.UserProfileService;
-import com.cloud.ai.chat.util.ValidationUtils;
 import com.cloud.common.core.domain.R;
 import com.cloud.common.security.SecurityUtils;
 import lombok.RequiredArgsConstructor;
@@ -34,27 +33,6 @@ public class RecommendationController {
     private final UserProfileService userProfileService;
     private final RecommendationService recommendationService;
     private final ChatMessageService chatMessageService;
-
-    /**
-     * 获取用户个性化推荐（首页使用）- 基于AI生成推荐提问
-     */
-    @GetMapping("/personalized")
-    public R<Map<String, Object>> getPersonalizedRecommendations(
-            @RequestParam(defaultValue = "5") int limit) {
-        Long userId = SecurityUtils.getCurrentUserId();
-        log.info("获取用户个性化推荐（AI生成），limit: {}", limit);
-
-        try {
-            // 验证参数
-            ValidationUtils.validateRecommendationLimit(limit);
-            // 调用推荐服务生成个性化推荐
-            Map<String, Object> recommendations = recommendationService.generatePersonalizedRecommendations(userId, limit);
-            return R.ok(recommendations);
-        } catch (Exception e) {
-            log.error("获取个性化推荐失败", e);
-            return R.fail("获取推荐失败：" + e.getMessage());
-        }
-    }
 
     /**
      * 获取用户兴趣分析
@@ -95,3 +73,4 @@ public class RecommendationController {
     }
 
 }
+

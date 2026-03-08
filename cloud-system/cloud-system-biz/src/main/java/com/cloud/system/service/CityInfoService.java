@@ -1,8 +1,8 @@
-package com.cloud.ai.chat.service.impl;
+package com.cloud.system.service;
 
 
-import com.cloud.ai.chat.domain.CityInfo;
-import com.cloud.ai.chat.repository.CityInfoRepository;
+import com.cloud.system.domain.CityInfo;
+import com.cloud.system.repository.CityInfoRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;

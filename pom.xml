@@ -36,7 +36,7 @@
         <jjwt.version>0.9.1</jjwt.version>
         <pagehelper.boot.version>2.0.0</pagehelper.boot.version>
         <transmittable-thread-local.version>2.14.5</transmittable-thread-local.version>
-
+        <xxl-version>3.3.0</xxl-version>
 
         <!-- maven plugin -->
         <maven-deploy-plugin.version>3.1.1</maven-deploy-plugin.version>
@@ -47,7 +47,7 @@
         <!-- 存在PDF兼容问题 降级版本 -->
         <tika.version>2.9.2</tika.version>
         <minio.version>8.5.9</minio.version>
-        <dashscope.version>2.21.8</dashscope.version>
+        <dashscope.version>2.22.9</dashscope.version>
 
     </properties>
 
@@ -58,7 +58,8 @@
         <!-- 网关和认证 -->
         <module>cloud-gateway</module>
         <module>cloud-auth</module>
-
+        <!-- 任务调度 -->
+        <module>cloud-job</module>
         <!-- 业务服务（独立模块，各自包含api+biz） -->
         <module>cloud-system</module>
         <module>cloud-ai-chat</module>

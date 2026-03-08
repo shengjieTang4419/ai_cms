@@ -45,6 +45,14 @@ public class PromptLoader {
         }
     }
 
+    public String loadPromptAndFormat(String resourcePath, Object... args) {
+        String template = loadPrompt(resourcePath);
+        if (template.isEmpty()) {
+            return "";
+        }
+        return String.format(template, args);
+    }
+
     /**
      * 加载默认系统提示词
      *

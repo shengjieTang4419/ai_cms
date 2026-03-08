@@ -19,7 +19,7 @@ public class UserTagsDimension implements Serializable {
 
     private static final long serialVersionUID = 1L;
 
-    private String tagName;
+    private String tagKey;
 
     private BigDecimal totalWeight;
 

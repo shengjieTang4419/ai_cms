@@ -100,5 +100,20 @@ services:
       timeout: 20s
       retries: 3
 
+  cloud-xxl-job:
+    image: xuxueli/xxl-job-admin:2.4.1
+    container_name: cloud-xxl-job-admin
+    environment:
+      PARAMS: '--spring.datasource.url=jdbc:postgresql://cloud-postgres:5432/small_basic?useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&serverTimezone=Asia/Shanghai --spring.datasource.username=postgres --spring.datasource.password=small@123$%^ --spring.datasource.driver-class-name=org.postgresql.Driver'
+      TZ: Asia/Shanghai
+    volumes:
+      - ./xxl-job/logs:/data/applogs
+    ports:
+      - "7071:8080"
+    depends_on:
+      - cloud-postgres
+    networks:
+      - cloud-network
+
 networks:
   cloud-network:

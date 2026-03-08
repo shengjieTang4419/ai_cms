@@ -30,6 +30,13 @@ public interface ModelProvider {
     boolean supportsVision();
 
     /**
+     * 是否多模态
+     *
+     * @return
+     */
+    boolean isMultiModel();
+
+    /**
      * 是否支持Stream（流式输出）
      */
     boolean supportsStream();
@@ -45,6 +52,17 @@ public interface ModelProvider {
      * 获取ChatClient实例
      */
     ChatClient getChatClient();
+
+    /**
+     * 简单调用（非流式）
+     * 多模态模型需要重写此方法使用 MultiModalConversation API
+     * 
+     * @param query 用户查询
+     * @return 模型响应
+     */
+    default String simpleCall(String query) {
+        return getChatClient().prompt(query).call().content();
+    }
 
     /**
      * 获取模型优先级（数字越小优先级越高）

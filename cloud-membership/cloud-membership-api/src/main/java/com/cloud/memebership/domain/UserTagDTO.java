@@ -5,6 +5,7 @@ import lombok.Data;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
+import java.util.Date;
 
 /**
  * @author shengjie.tang
@@ -29,4 +30,8 @@ public class UserTagDTO implements Serializable {
     private BigDecimal totalWeight;
 
     private String sourceType;
+
+    private Date lastActiveTime;
+
+    private Date createdTime;
 }

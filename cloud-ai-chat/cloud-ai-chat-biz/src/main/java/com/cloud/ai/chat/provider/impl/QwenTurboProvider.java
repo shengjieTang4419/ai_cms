@@ -64,6 +64,11 @@ public class QwenTurboProvider implements ModelProvider {
     }
 
     @Override
+    public boolean isMultiModel() {
+        return true;
+    }
+
+    @Override
     public ChatClient getChatClient() {
         return chatClient;
     }

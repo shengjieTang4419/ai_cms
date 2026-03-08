@@ -69,6 +69,11 @@ public class QwenPlusProvider implements ModelProvider {
     }
 
     @Override
+    public boolean isMultiModel() {
+        return false;
+    }
+
+    @Override
     public ChatClient getChatClient() {
         return chatClient;
     }
@@ -76,6 +81,6 @@ public class QwenPlusProvider implements ModelProvider {
     @Override
     public int getPriority() {
         //趁着他还有免费的额度 先用了再说
-        return 1;
+        return 100;
     }
 }

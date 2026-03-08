@@ -1,8 +1,11 @@
 package com.cloud.ai.chat.domain;
 
+import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
+import lombok.NoArgsConstructor;
 
+import java.io.Serializable;
 import java.util.List;
 
 /**
@@ -14,8 +17,12 @@ import java.util.List;
  * @date 2025/10/30
  */
 @Data
+@NoArgsConstructor
+@AllArgsConstructor
 @Builder
-public class ChatContext {
+public class ChatContext implements Serializable {
+
+    private static final long serialVersionUID = 1L;
 
     /**
      * 用户查询（原始问题）
@@ -26,6 +33,8 @@ public class ChatContext {
      * 会话ID
      */
     private String sessionId;
+
+    private String dialogueId;
 
     /**
      * 是否使用RAG增强
@@ -96,6 +105,18 @@ public class ChatContext {
      */
     public int getImageCount() {
         return imageUrls == null ? 0 : imageUrls.size();
+    }
+
+    public void setImageUrl(List<String> imageUrl) {
+        this.imageUrls = imageUrl;
+    }
+
+    public void setIsWithEnableSearch(Boolean isWithEnableSearch) {
+        this.withEnableSearch = Boolean.TRUE.equals(isWithEnableSearch);
+    }
+
+    public void setIsDeepThinking(Boolean isDeepThinking) {
+        this.useThinking = Boolean.TRUE.equals(isDeepThinking);
     }
 }
 

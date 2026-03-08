@@ -7,7 +7,9 @@ import com.cloud.ai.chat.mcp.api.McpTool;
 import com.cloud.ai.chat.mcp.api.Schema;
 import com.cloud.ai.chat.mcp.service.LocationService;
 import com.cloud.ai.chat.mcp.service.WeatherService;
-import com.cloud.ai.chat.service.impl.CityInfoService;
+import com.cloud.common.core.domain.R;
+import com.cloud.system.api.dto.CityDTO;
+import com.cloud.system.api.feign.RemoteCityService;
 import com.fasterxml.jackson.databind.JsonNode;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -33,7 +35,7 @@ public class WeatherMcpTool implements McpTool {
 
     private final WeatherService weatherService;
     private final LocationService locationService;
-    private final CityInfoService cityInfoService;
+    private final RemoteCityService remoteCityService;
 
     @Override
     public String getName() {
@@ -98,11 +100,14 @@ public class WeatherMcpTool implements McpTool {
 
 
     private String getCityCode(String cityName) {
-        String cityCode;
+        String cityCode = null;
         // 如果用户指定了城市名称，通过城市名称获取城市编码
         if (StringUtils.hasText(cityName)) {
             log.info("用户指定了城市：{}，开始查询该城市的天气", cityName);
-            cityCode = cityInfoService.getCityCode(cityName.trim());
+            R<CityDTO> cityResult = remoteCityService.getCityByName(cityName.trim());
+            if (cityResult != null && R.isSuccess(cityResult) && cityResult.getData() != null) {
+                cityCode = cityResult.getData().getAmapCityCode();
+            }
 
             if (cityCode == null || cityCode.isEmpty()) {
                 log.warn("未找到城市：{}", cityName);

@@ -1,41 +1,24 @@
 package com.cloud.membership.domain;
 
+import com.cloud.memebership.domain.TagPath;
 import jakarta.persistence.*;
 import lombok.Data;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
 import java.io.Serializable;
-import java.math.BigDecimal;
 import java.time.LocalDateTime;
 
 /**
  * @author shengjie.tang
  * @version 1.0.0
- * @description: 用户标签表 - 用户最终的综合标签，融合了基础画像和聊天行为
+ * @description: 用户标签表
  * @date 2025/10/14 14:35
  */
 @Data
 @Entity
 @Table(name = "user_tags")
 public class UserTags implements Serializable {
-
-    /**
-     * 权重常量
-     */
-    public static final BigDecimal BASE_WEIGHT = BigDecimal.ONE;      // 基础权重（来自用户画像）
-    public static final BigDecimal CHAT_WEIGHT = BigDecimal.ONE;      // 聊天权重
-    public static final BigDecimal OVERLAP_WEIGHT = BigDecimal.valueOf(2);   // 重叠权重（基础画像与聊天标签重叠时，为了使得热点标签更突出）
-    public static final BigDecimal DEMOGRAPHIC_WEIGHT = BigDecimal.valueOf(0.2); // 人口统计标签权重（年龄标签）
-    public static final BigDecimal DECAY_FACTOR = BigDecimal.valueOf(0.5); // 衰减因子（每月衰减一半，快速使得过期失效热点数据失效）
-
-    /**
-     * 来源
-     * PROFILE-来自用户画像, CHAT-来自聊天内容, FUSION-融合标签
-     */
-    public static final String profileSource = "PROFILE";
-    public static final String chatSource = "CHAT";
-    public static final String fusionSource = "FUSION";
 
     private static final long serialVersionUID = 1L;
 
@@ -53,40 +36,24 @@ public class UserTags implements Serializable {
     private Long userId;
 
     /**
-     * 标签名称
+     * 标签路径key
+     * 人工智能/多模态/视觉理解
      */
-    @Column(name = "tag_name", nullable = false, length = 100)
-    private String tagName;
+    @Column(name = "path_key", nullable = false, length = 500)
+    private String pathKey;
 
     /**
-     * 基础权重（来自用户画像）
+     * 序列化出来的TagPath
      */
-    @Column(name = "base_weight", nullable = false)
-    private BigDecimal baseWeight = BigDecimal.ZERO;
+    @Transient
+    private TagPath tagPath;
 
     /**
-     * 聊天权重（来自聊天行为）
+     * 累积权重
      */
-    @Column(name = "chat_weight", nullable = false)
-    private BigDecimal chatWeight = BigDecimal.ZERO;
+    @Column(name = "total_weight")
+    private Double totalWeight;
 
-    /**
-     * 融合权重（基础画像与聊天标签重叠时的额外权重）
-     */
-    @Column(name = "fusion_weight", nullable = false)
-    private BigDecimal fusionWeight = BigDecimal.ZERO;
-
-    /**
-     * 总权重（base_weight + chat_weight + fusion_weight）
-     */
-    @Column(name = "total_weight", nullable = false)
-    private BigDecimal totalWeight = BigDecimal.ZERO;
-
-    /**
-     * 标签来源类型（PROFILE-来自用户画像, CHAT-来自聊天内容, FUSION-融合标签）
-     */
-    @Column(name = "source_type", length = 20)
-    private String sourceType = "CHAT";
 
     /**
      * 最后更新时间

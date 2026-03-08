@@ -3,8 +3,7 @@ package com.cloud.system.api.factory;
 import com.cloud.common.core.domain.R;
 import com.cloud.system.api.dto.LoginUser;
 import com.cloud.system.api.feign.RemoteUserService;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.cloud.openfeign.FallbackFactory;
 import org.springframework.stereotype.Component;
 
@@ -20,8 +19,8 @@ import org.springframework.stereotype.Component;
  * @author shengjie.tang
  */
 @Component
+@Slf4j
 public class RemoteUserFallbackFactory implements FallbackFactory<RemoteUserService> {
-    private static final Logger log = LoggerFactory.getLogger(RemoteUserFallbackFactory.class);
 
     @Override
     public RemoteUserService create(Throwable throwable) {

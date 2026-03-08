@@ -18,5 +18,6 @@ public class UserProfileRequest {
     private Integer age;
     private String location;
     private Integer occupation;
+    private String occupationName;
     private List<String> hobbies;
 }

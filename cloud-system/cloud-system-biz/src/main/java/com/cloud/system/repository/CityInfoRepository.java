@@ -1,6 +1,6 @@
-package com.cloud.ai.chat.repository;
+package com.cloud.system.repository;
 
-import com.cloud.ai.chat.domain.CityInfo;
+import com.cloud.system.domain.CityInfo;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;

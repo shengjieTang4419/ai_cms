@@ -4,6 +4,7 @@ package com.cloud.membership.controller;
 import com.cloud.common.security.SecurityUtils;
 import com.cloud.membership.domain.UserProfile;
 import com.cloud.membership.domain.UserProfileRequest;
+import com.cloud.membership.service.ITemplateUserProfile;
 import com.cloud.membership.service.impl.UserProfileService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -20,6 +21,7 @@ import org.springframework.web.bind.annotation.*;
 public class UserProfileController {
 
     private final UserProfileService userProfileService;
+    private final ITemplateUserProfile templateUserProfile;
 
     /**
      * 获取当前用户画像
@@ -27,7 +29,12 @@ public class UserProfileController {
     @GetMapping
     public UserProfile getCurrentUserProfile() {
         Long userId = SecurityUtils.getCurrentUserId();
-        return userProfileService.getUserProfile(userId);
+        return null;//userProfileService.getUserProfile(userId);
+    }
+
+    @GetMapping("doInit")
+    public void doInit() {
+        templateUserProfile.doInit();
     }
 
     /**

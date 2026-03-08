@@ -63,6 +63,19 @@
             <artifactId>cloud-common-security</artifactId>
             <version>${revision}</version>
         </dependency>
+        <dependency>
+            <groupId>com.cloud</groupId>
+            <artifactId>cloud-job</artifactId>
+            <version>1.0.0</version>
+            <scope>compile</scope>
+        </dependency>
+
+        <!-- cloud-ai-chat-api（用于调用AI生成刻板印象标签） -->
+        <dependency>
+            <groupId>com.cloud</groupId>
+            <artifactId>cloud-ai-chat-api</artifactId>
+            <version>${revision}</version>
+        </dependency>
     </dependencies>
 
     <build>

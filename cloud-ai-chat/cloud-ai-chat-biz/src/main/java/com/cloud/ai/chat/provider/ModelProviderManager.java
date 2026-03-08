@@ -78,9 +78,8 @@ public class ModelProviderManager {
                         provider.getPriority());
             }
 
-            // 选择默认Provider：优先选择非Vision模型，如果没有则选择优先级最高的
+            // 选择默认Provider
             defaultProvider = enabledProviders.stream()
-                    .filter(p -> !p.supportsVision())
                     .findFirst()
                     .orElse(enabledProviders.get(0));
 
@@ -125,7 +124,7 @@ public class ModelProviderManager {
 
     /**
      * 获取优先级最高的支持Thinking的Provider
-     * 
+     *
      * @return 支持Thinking的Provider，如果没有则返回默认Provider
      */
     public ModelProvider getThinkingProvider() {

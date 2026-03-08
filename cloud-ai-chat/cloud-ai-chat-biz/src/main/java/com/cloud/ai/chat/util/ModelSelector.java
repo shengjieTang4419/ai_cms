@@ -45,13 +45,16 @@ public class ModelSelector {
                 log.warn("未找到支持Thinking的模型，回退到默认模型");
             }
         }
-
         // 当前策略：即使有图片，如果已经通过OCR提取了文字，也使用文本模型
         // 因为图片内容已经转化为文字，不需要使用视觉模型
         ModelProvider provider = providerManager.getDefaultProvider();
         log.info("根据上下文选择模型: {} (hasImages: {}, ragEnhanced: {}, useThinking: {})",
                 provider.getModelName(), context.hasImages(), context.isRagEnhanced(), context.isUseThinking());
         return provider;
+    }
+
+    public ModelProvider getDefaultPeriod() {
+        return providerManager.getDefaultProvider();
     }
 
     /**

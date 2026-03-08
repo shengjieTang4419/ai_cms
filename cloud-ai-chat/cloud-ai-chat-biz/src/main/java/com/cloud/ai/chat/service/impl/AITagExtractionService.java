@@ -1,13 +1,13 @@
 package com.cloud.ai.chat.service.impl;
 
-
 import com.cloud.ai.chat.provider.ModelProvider;
 import com.cloud.ai.chat.provider.ModelProviderManager;
+import com.cloud.ai.chat.util.PromptLoader;
+import com.cloud.memebership.domain.TagPath;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
-import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -25,11 +25,14 @@ public class AITagExtractionService {
 
     private final ModelProviderManager providerManager;
     private final ObjectMapper objectMapper;
+    private final PromptLoader promptLoader;
 
     public AITagExtractionService(ModelProviderManager providerManager,
-                                  ObjectMapper objectMapper) {
+                                  ObjectMapper objectMapper,
+                                  PromptLoader promptLoader) {
         this.providerManager = providerManager;
         this.objectMapper = objectMapper;
+        this.promptLoader = promptLoader;
     }
 
     /**
@@ -43,19 +46,18 @@ public class AITagExtractionService {
     /**
      * AI智能提取聊天标签
      */
-    public List<String> extractChatTagsWithAI(String content) {
+    public TagPath extractChatTagsWithAI(String content) {
         if (content == null || content.trim().isEmpty()) {
-            return new ArrayList<>();
+            return null;
         }
 
         try {
             String prompt = buildTagExtractionPrompt(content);
-
             String response = getChatClient().prompt(prompt)
                     .call()
                     .content();
 
-            return parseTagsFromResponse(Objects.requireNonNull(response));
+            return parseTagPathFromResponse(Objects.requireNonNull(response));
 
         } catch (Exception e) {
             log.error("AI标签提取失败，使用备用方案", e);
@@ -64,93 +66,75 @@ public class AITagExtractionService {
     }
 
     /**
-     * 异步AI标签提取（用于批量处理）
-     */
-    @Async
-    public void extractChatTagsAsync(String content, Long userId, String sessionId,
-                                     TagExtractionCallback callback) {
-        try {
-            List<String> tags = extractChatTagsWithAI(content);
-            callback.onSuccess(tags);
-        } catch (Exception e) {
-            log.error("异步AI标签提取失败", e);
-            callback.onError(e);
-        }
-    }
-
-    /**
      * 构建标签提取提示词
      */
     private String buildTagExtractionPrompt(String content) {
-        return String.format("""
-                请分析以下聊天内容，提取出用户真正感兴趣的话题标签。
-                
-                要求：
-                1. 只提取用户主动讨论、询问或表达兴趣的话题
-                2. 忽略负面情感的话题（如抱怨、批评）
-                3. 忽略纯信息查询（如"现在几点"、"天气如何"）
-                4. 标签要简洁明确，2-4个字
-                5. 最多提取5个标签
-                6. 返回JSON格式：{"tags": ["标签1", "标签2", "标签3"]}
-                
-                聊天内容：
-                %s
-                
-                请分析并返回标签：
-                """, content);
+        return promptLoader.loadPromptAndFormat("prompts/tag-extraction-prompt.txt", content);
     }
 
     /**
-     * 解析AI响应中的标签
+     * 解析AI响应中的路径
      */
-    private List<String> parseTagsFromResponse(String response) {
+    private TagPath parseTagPathFromResponse(String response) {
         try {
             // 尝试解析JSON格式
-            if (response.trim().startsWith("{")) {
+            String trimmed = response.trim();
+            if (trimmed.startsWith("{")) {
                 @SuppressWarnings("unchecked")
-                Map<String, Object> result = objectMapper.readValue(response, Map.class);
-                @SuppressWarnings("unchecked")
-                List<String> tags = (List<String>) result.get("tags");
-                return tags != null ? tags : new ArrayList<>();
+                Map<String, Object> result = objectMapper.readValue(trimmed, Map.class);
+
+                Object pathObj = result.get("path");
+                if (pathObj instanceof List<?> list) {
+                    List<String> path = coerceStringList(list);
+                    return buildTagPath(path);
+                }
+
+                return null;
             }
 
-            // 如果不是JSON格式，尝试提取标签
-            return extractTagsFromText(response);
+            // 如果不是JSON格式，尝试从文本中提取一条路径
+            return extractPathFromText(trimmed);
 
         } catch (JsonProcessingException e) {
             log.warn("解析AI响应失败，尝试文本提取: {}", response);
-            return extractTagsFromText(response);
+            return extractPathFromText(response);
         }
     }
 
     /**
-     * 从文本中提取标签
+     * 从文本中提取路径（兜底）
      */
-    private List<String> extractTagsFromText(String text) {
-        List<String> tags = new ArrayList<>();
-
-        // 查找可能的标签模式
-        String[] lines = text.split("\n");
-        for (String line : lines) {
-            line = line.trim();
-            if (line.contains("标签") || line.contains("话题")) {
-                // 提取引号内的内容
-                String[] parts = line.split("[\"']");
-                for (int i = 1; i < parts.length; i += 2) {
-                    if (parts[i].length() >= 2 && parts[i].length() <= 6) {
-                        tags.add(parts[i]);
-                    }
-                }
-            }
+    private TagPath extractPathFromText(String text) {
+        String trimmed = text == null ? "" : text.trim();
+        if (trimmed.isEmpty()) {
+            return null;
         }
 
-        return tags.stream().distinct().limit(5).collect(Collectors.toList());
+        // 尝试解析形如：人工智能/多模态/视觉理解
+        String candidate = trimmed;
+        int newlineIdx = candidate.indexOf('\n');
+        if (newlineIdx > 0) {
+            candidate = candidate.substring(0, newlineIdx);
+        }
+        candidate = candidate.replace("\\u3000", " ").trim();
+        candidate = candidate.replace("->", "/").replace(">", "/").replace(" ", "");
+
+        if (candidate.contains("/")) {
+            List<String> path = Arrays.stream(candidate.split("/"))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .collect(Collectors.toList());
+            return buildTagPath(path);
+        }
+
+        // 否则当成单级类目
+        return buildTagPath(Collections.singletonList(candidate));
     }
 
     /**
      * 备用标签提取方案（传统关键词匹配）
      */
-    private List<String> extractChatTagsFallback(String content) {
+    private TagPath extractChatTagsFallback(String content) {
         // 简化的关键词映射
         Map<String, List<String>> keywordMap = Map.of(
                 "编程", Arrays.asList("编程", "代码", "开发", "技术", "软件", "程序", "算法", "bug", "调试"),
@@ -165,7 +149,7 @@ public class AITagExtractionService {
                 "游戏", Arrays.asList("游戏", "电竞", "玩家", "攻略", "装备", "副本", "竞技", "steam")
         );
 
-        List<String> extractedTags = new ArrayList<>();
+        List<TagPath> extractedTagPaths = new ArrayList<>();
         String lowerContent = content.toLowerCase();
 
         for (Map.Entry<String, List<String>> entry : keywordMap.entrySet()) {
@@ -176,18 +160,59 @@ public class AITagExtractionService {
                     lowerContent.contains(keyword.toLowerCase()));
 
             if (found) {
-                extractedTags.add(tagName);
+                TagPath tagPath = buildTagPath(Collections.singletonList(tagName));
+                if (tagPath != null) {
+                    extractedTagPaths.add(tagPath);
+                }
             }
         }
 
-        return extractedTags.stream().distinct().limit(5).collect(Collectors.toList());
+        return extractedTagPaths.stream().findFirst().orElse(null);
+    }
+
+    private List<String> coerceStringList(List<?> list) {
+        List<String> result = new ArrayList<>();
+        for (Object o : list) {
+            if (o == null) {
+                continue;
+            }
+            String s = String.valueOf(o).trim();
+            if (!s.isEmpty()) {
+                result.add(s);
+            }
+        }
+        return result;
+    }
+
+    private TagPath buildTagPath(List<String> rawPath) {
+        if (rawPath == null) {
+            return null;
+        }
+        List<String> path = rawPath.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(s -> !s.isEmpty())
+                .collect(Collectors.toList());
+        if (path.isEmpty()) {
+            return null;
+        }
+
+        if (path.size() < 3) {
+            log.warn("AI返回的话题层级不足3层，忽略本次标签沉淀，path={}", path);
+            return null;
+        }
+
+        TagPath tagPath = new TagPath();
+        tagPath.setPath(path);
+        tagPath.setKey(String.join("/", path));
+        return tagPath;
     }
 
     /**
      * 标签提取回调接口
      */
     public interface TagExtractionCallback {
-        void onSuccess(List<String> tags);
+        void onSuccess(TagPath tagPath);
 
         void onError(Exception e);
     }

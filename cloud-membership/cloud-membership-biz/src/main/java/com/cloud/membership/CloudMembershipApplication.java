@@ -8,7 +8,7 @@ import org.springframework.scheduling.annotation.EnableAsync;
 import org.springframework.scheduling.annotation.EnableScheduling;
 
 @SpringBootApplication(scanBasePackages = {"com.cloud.common", "com.cloud.membership"})
-@EnableFeignClients(basePackages = {"com.cloud.*.api"})
+@EnableFeignClients(basePackages = {"com.cloud.*.api", "com.cloud.ai.chat.api"})
 @EnableAspectJAutoProxy(exposeProxy = true)
 @EnableScheduling
 @EnableAsync

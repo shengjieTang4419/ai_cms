@@ -61,6 +61,11 @@ public class QwenVisionProvider implements ModelProvider {
     }
 
     @Override
+    public boolean isMultiModel() {
+        return true;
+    }
+
+    @Override
     public ChatClient getChatClient() {
         return chatClient;
     }

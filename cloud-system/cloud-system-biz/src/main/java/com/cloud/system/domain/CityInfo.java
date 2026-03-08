@@ -1,4 +1,4 @@
-package com.cloud.ai.chat.domain;
+package com.cloud.system.domain;
 
 import jakarta.persistence.*;
 import lombok.Data;
@@ -120,4 +120,5 @@ public class CityInfo implements Serializable {
      */
     @Column(name = "update_time")
     private LocalDateTime updateTime;
+
 }

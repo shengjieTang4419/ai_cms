@@ -5,6 +5,7 @@ import com.cloud.ai.chat.mcp.api.McpTool;
 import com.cloud.ai.chat.mcp.api.Schema;
 import com.cloud.ai.chat.provider.ModelProvider;
 import com.cloud.ai.chat.provider.ModelProviderManager;
+import com.cloud.ai.chat.util.PromptLoader;
 import com.cloud.common.core.util.StringUtils;
 import com.cloud.memebership.api.RemoteUserTagFeignService;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -36,6 +37,9 @@ public class PersonalizedRecommendationMcpTool implements McpTool {
     @Autowired
     @Lazy
     private ModelProviderManager providerManager;
+
+    @Autowired
+    private PromptLoader promptLoader;
 
 
     public PersonalizedRecommendationMcpTool(RemoteUserTagFeignService remoteUserTagFeignService) {
@@ -112,7 +116,7 @@ public class PersonalizedRecommendationMcpTool implements McpTool {
             if (StringUtils.isEmpty(suggestion)) {
                 return new ArrayList<>();
             }
-            
+
             // 使用|||作为分隔符，更安全
             return Arrays.stream(suggestion.split("\\|\\|\\|"))
                     .map(String::trim)
@@ -130,22 +134,7 @@ public class PersonalizedRecommendationMcpTool implements McpTool {
      */
     private String generateFollowUpSuggestionWithAI(String currentTopic) {
         try {
-            String prompt = String.format("""
-                    基于用户当前话题"%s"，生成三个自然的后续建议问题。
-                    
-                    要求：
-                    1. 问题要自然，像朋友间的对话
-                    2. 要体现与当前话题的关联
-                    3. 问题长度控制在20-40个字
-                    4. 直接返回问题，不要额外解释
-                    5. 话题与话题之间必须用|||做分割（三个竖线）
-                    6. 话题内容中不能包含|||符号
-                    7. 返回格式示例：问题1|||问题2|||问题3
-                    
-                    当前话题：%s
-                    生成的建议：
-                    """, currentTopic, currentTopic);
-
+            String prompt = promptLoader.loadPromptAndFormat("prompts/follow-up-suggestion-prompt.txt", currentTopic, currentTopic);
             String response = getChatClient().prompt(prompt).call().content();
             assert response != null;
             return response.trim();
